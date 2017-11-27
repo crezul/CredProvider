@@ -1,51 +1,23 @@
 
-#include "inclfiles.h"
-
-
-SERVICE_STATUS        g_ServiceStatus = { 0 };
-SERVICE_STATUS_HANDLE g_StatusHandle = NULL;
-HANDLE                g_ServiceStopEvent = INVALID_HANDLE_VALUE;
-
-VOID WINAPI ServiceMain(DWORD argc, LPTSTR *argv);
-VOID WINAPI ServiceCtrlHandler(DWORD);
-DWORD WINAPI ServiceWorkerThread(LPVOID lpParam);
-DWORD WINAPI ServerWorkerClient(LPVOID lpParam);
-BOOL SpeakWithPipe(char*, char*);
-void addLogMessage(char *);
-void addLogMessageW(LPTSTR ); // to UNICODE MESSAGE
-BOOL GetCurrentUser(LPTSTR &, DWORD &);
-
-#define SERVICE_NAME  _T("My Sample Service")
-#define ERROR_CLIENT_THEARD NULL
-
-
-void addLogMessageW(LPTSTR un)
-{
-	char ch[40]="";
-		WideCharToMultiByte(CP_ACP, 0, un, -1, ch, 40, 0, 0);
-	fstream  fout("C:\\Users\\Danil\\Desktop\\ServiceCredProvLogFile.txt", ios::out | ios::app);
-	time_t tt;
-	tm* tp;
-	tt = time(0);
-	tp = localtime(&tt);
-	fout << asctime(tp) << '\t' << ch << '\n';
-	fout.close();
-	return;
-}
-void addLogMessage(char *ch)
-{
-	fstream  fout("C:\\Users\\Danil\\Desktop\\ServiceCredProvLogFile.txt", ios::out | ios::app);
-	time_t tt;
-	tm* tp;
-	tt = time(0);
-	tp = localtime(&tt);
-	fout << asctime(tp) << '\t' << ch << '\n';
-	fout.close();
-	return;
-}
+#include "servicemain.h"
 
 int _tmain(int argc, TCHAR *argv[])
 {
+	addLogMessage("Start main func");
+	
+		if (wcscmp(argv[argc - 1], _T("install")) == 0)
+	{
+		InstallService();
+		return 0;
+	}
+	else 
+		if (wcscmp(argv[argc - 1], _T("remove")) == 0) 
+	{
+		RemoveService();
+		return 0;
+	}
+
+
 	SERVICE_TABLE_ENTRY ServiceTable[] =
 	{
 		{ SERVICE_NAME, (LPSERVICE_MAIN_FUNCTION)ServiceMain },
@@ -55,7 +27,7 @@ int _tmain(int argc, TCHAR *argv[])
 	if (StartServiceCtrlDispatcher(ServiceTable) == FALSE)
 	{
 		addLogMessage("In MAIN funcn error: StartServiceCtrlDispatcher(ServiceTable) = FALSE");
-		return GetLastError();
+		return -1;
 	}
 	addLogMessage("End main funcn");
 	return 0;
@@ -86,7 +58,7 @@ VOID WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 	if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
 	{
 		addLogMessage(
-			"My Sample Service: ServiceMain: SetServiceStatus returned error");
+			"Service: ServiceMain: SetServiceStatus returned error");
 	}
 
 	/*
@@ -107,7 +79,7 @@ VOID WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 		if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
 		{
 			addLogMessage(
-				"My Sample Service: ServiceMain: SetServiceStatus returned error. StopEvent = NULL");
+				"Service: ServiceMain: SetServiceStatus returned error. StopEvent = NULL");
 		}
 		return;
 	}
@@ -121,7 +93,7 @@ VOID WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 	if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
 	{
 		addLogMessage(
-			"My Sample Service: ServiceMain: SetServiceStatus returned error");
+			" Service: ServiceMain: SetServiceStatus returned error");
 	}
 
 	// Start a thread that will perform the main task of the service
@@ -144,7 +116,7 @@ VOID WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 	if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
 	{
 		addLogMessage(
-			"My Sample Service: ServiceMain: SetServiceStatus returned error");
+			" Service: ServiceMain: SetServiceStatus returned error");
 	}
 	addLogMessage("END ServiceMain funcn");
 	return;
@@ -152,14 +124,15 @@ VOID WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 
 VOID WINAPI ServiceCtrlHandler(DWORD CtrlCode)
 {
-	addLogMessage("Start ServiceCtrlHandler funcn");
+	//addLogMessage("ServiceCtrlHandler start");
 	switch (CtrlCode)
 	{
+	case SERVICE_CONTROL_SHUTDOWN:
 	case SERVICE_CONTROL_STOP:
-		addLogMessage("Start SERVICE_CONTROL_STOP");
+		addLogMessage("STOPPED");
 		if (g_ServiceStatus.dwCurrentState != SERVICE_RUNNING)
 		{
-			addLogMessage("Service status if stopped function !=SERVICE_RUNNING");
+			addLogMessage("Service status in stopped function !=SERVICE_RUNNING");
 			break;
 		}
 
@@ -178,7 +151,7 @@ VOID WINAPI ServiceCtrlHandler(DWORD CtrlCode)
 		if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
 		{
 			addLogMessage(
-				"My Sample Service: ServiceCtrlHandler: SetServiceStatus returned error in stopped section");
+				" Service: ServiceCtrlHandler: SetServiceStatus returned error in stopped section");
 		}
 	
 		addLogMessage("Function STOPSERVICE is finished!");
@@ -189,448 +162,427 @@ VOID WINAPI ServiceCtrlHandler(DWORD CtrlCode)
 	}
 }
 
+
+
 DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
 {
 	addLogMessage("Start ServiceWorkerThread funcn");
-	
-		WSADATA Data;
-		int status = WSAStartup(MAKEWORD(1, 1), &Data);
-		if (status != 0)
-		{
-			addLogMessage("ERROR: WSAStartup unsuccessful");
-			return  ERROR_SUCCESS;;
-		}
+
+	WSADATA Data;
+	int status = WSAStartup(MAKEWORD(1, 1), &Data);
+	if (status != 0)
+	{
+		addLogMessage("ERROR: WSAStartup unsuccessful");
+		return  ERROR_SUCCESS;;
+	}
 	//socket setting
-	int s;
+	unsigned __int64 s;
 	SOCKADDR_IN servAdr;
 	memset(&servAdr, 0, sizeof(servAdr));
-	servAdr.sin_port = htons(4000);
-	servAdr.sin_family = AF_INET;
-	servAdr.sin_addr.s_addr = htonl(INADDR_ANY);// htonl(INADDR_LOOPBACK);
-	//INADDR_ANY;
-	//    inet_addr("65.55.21.250");
+	servAdr.sin_port = htons(87);
+	
+	servAdr.sin_family =  AF_INET; // AF_UNSPEC (любой тип АПИ протокола ИП4 ИП6)
+	servAdr.sin_addr.s_addr = htonl(INADDR_ANY); //inet_addr("127.0.0.1");
+		//htonl(INADDR_ANY);// htonl(INADDR_LOOPBACK);
+												//INADDR_ANY;
+												//    inet_addr("65.55.21.250");
 	s = socket(AF_INET, SOCK_STREAM, 0);
+
 	if (s == INVALID_SOCKET)
 	{
 		addLogMessage("ERROR: socket unsuccessful");
 		return ERROR_SUCCESS;
 	}
+	if (servAdr.sin_addr.s_addr == INADDR_NONE) {
+		addLogMessage("inet_addr не выполнен и возвращен INADDR_NONE ");
+		WSACleanup();
+		return ERROR_SUCCESS;
+	}
+
+	/*if (servAdr.sin_addr.s_addr == INADDR_ANY) {
+		addLogMessage("inet_addr не выполнен и возвращен INADDR_ANY ");
+		WSACleanup();
+		return ERROR_SUCCESS;
+	}*/
 	if (bind(s, (SOCKADDR*)&servAdr, sizeof(servAdr)) == -1)
 	{
 		addLogMessage("ERROR: bind unsuccessful");
 		return ERROR_SUCCESS;
 	}
+	addLogMessage("\n My adress is :"); addLogMessage(inet_ntoa(servAdr.sin_addr));
 	listen(s, 10); // 10 - кол-во клиентов что могут подсоеденится 
 				   //получаем в буфер индификатор
 	HANDLE hThreadForClient = ERROR_CLIENT_THEARD; // переменная для потока обработки клиента
-	
-		SOCKADDR_IN from_sin;
-		int from_len;
-		from_len = sizeof(from_sin);
 
-		while (WaitForSingleObject(g_ServiceStopEvent, 0) != WAIT_OBJECT_0) //1
+	SOCKADDR_IN from_sin;
+	int from_len;
+	from_len = sizeof(from_sin);
+
+	while (WaitForSingleObject(g_ServiceStopEvent, 0) != WAIT_OBJECT_0) //1
+	{
+		fd_set s_set = { 1,{ s } }; // с цмкла вінести
+		timeval timeout = { 0, 0 };//
+		int select_res = select(0, &s_set, 0, 0, &timeout);
+		if (select_res == SOCKET_ERROR)
 		{
-			fd_set s_set = { 1,{ s } }; // с цмкла вінести
-			timeval timeout = { 0, 0 };//
-			int select_res = select(0, &s_set, 0, 0, &timeout);
-			if (select_res == SOCKET_ERROR)
+			addLogMessage("Select is field. Error of network!"); // для дебага
+		}
+		if (select_res)
+		{
+			addLogMessage("Waiting for a connection..."); // для дебага
+
+			unsigned __int64 *s_new = new unsigned __int64(
+				accept(s, (SOCKADDR*)&from_sin, &from_len));
+
+			char socketstr[8];
+			itoa(*s_new, socketstr, 10);
+			addLogMessage("socket new client = "); addLogMessage(socketstr);
+			if (*s_new < 0) //не глобальная ошибка
 			{
-				addLogMessage("Select is field. Error of network!"); // для дебага
+				addLogMessage("ERROR. Acept with client field");
+				WSACleanup();
 			}
-			if (select_res)
+			else
 			{
-				addLogMessage("Waiting for a connection..."); // для дебага
-				
-				unsigned __int64 *s_new = new unsigned __int64(
-					accept(s, (SOCKADDR*)&from_sin, &from_len)); 
-				
-				char socketstr[8];
-				itoa(*s_new, socketstr, 10);
-				addLogMessage("socket new client = "); addLogMessage(socketstr);
-				if (*s_new < 0) //не глобальная ошибка
+				addLogMessage("Client connect");
+				// функция обработки сервера
+				hThreadForClient = CreateThread(NULL, 0, ServerWorkerClient, (LPVOID)s_new, 0, NULL);
+
+				if (hThreadForClient == ERROR_CLIENT_THEARD)
 				{
-					addLogMessage("ERROR. Acept with client field");
+					addLogMessage("Client theard didnt created"); // не глобальная ошибка
+					CloseHandle(hThreadForClient);
 					WSACleanup();
 				}
-				else
-				{
-					addLogMessage("Client connect");
-					// функция обработки сервера
-					hThreadForClient = CreateThread(NULL, 0, ServerWorkerClient, (LPVOID)s_new, 0, NULL);
-
-					if (hThreadForClient == ERROR_CLIENT_THEARD)
-					{
-						addLogMessage("Client theard didnt created"); // не глобальная ошибка
-						CloseHandle(hThreadForClient);
-						WSACleanup();
-					}
-				}
-				//очистка буферов и сокета принятого клиента 
-				from_len = 0;
-				memset(&from_sin, 0, sizeof(from_sin));
 			}
+			//очистка буферов и сокета принятого клиента 
+			//from_len = 0;
+			//memset(&from_sin, 0, sizeof(from_sin));
 		}
+	}
 
-			addLogMessage("END: Function servicetheard is finished!!");
-			closesocket(s);
-		   	WSACleanup();
+	addLogMessage("END: Function servicetheard is finished!!");
+	closesocket(s);
+	WSACleanup();
 	return SEC_E_OK;
 }
-//DWORD WINAPI ServerWorkerClient(LPVOID lpParam)
-//{
-//	addLogMessage("Start ServerWorkerClient funcn");
-//	unsigned __int64 * socket_client = (unsigned __int64*)lpParam;
-//	//for debug client socket
-//	char socketstr[8];
-//	itoa(*socket_client, socketstr, 10);
-//	addLogMessage("socket  client in ServerWorkerClient = "); addLogMessage(socketstr);
-//	char message[127] = ""; // можно денамически выделять память исходя из размера байтРидера
-//	int bytes_read=0;
-//	//bool b = TRUE; // для цикла но мы ожидаем конец события
-//	//while (WaitForSingleObject(g_ServiceStopEvent, 0) != WAIT_OBJECT_0) //b 
-//	//{
-//		bytes_read = recv(*socket_client, message, sizeof(message), 0); // message будет json
-//		if (bytes_read == 0) // потом 1 пакет будет идти как сообщение для размера передаваемых данных  
-//		{
-//			addLogMessage("ERROR. Bytes reader is field or error of network");
-//			//ExitThread(-1);
-//		}
-//		addLogMessage("Massage from client is accepted:");
-//		//debag mod (not read)
-//		int lensms = strlen(message);
-//		char * sms = new char[lensms];
-//		itoa(bytes_read, socketstr, 10);
-//		sms = message;
-//		addLogMessage(sms); // для дебага!
-//		addLogMessage("Long message = "); addLogMessage(socketstr);
-//		bytes_read = 0;
-////	b = FALSE; //выход с цикла (он нужен весь прием должен быть в цикле хотя ресв принимает все в своем цикле )																	   //посылаем результат смс провайдеру!
-//	//}
-//		// список активных сессий 
-//		  // если клиент хочет залогиниться то у нас идет проверка 
-//			 //  кто чейчас на ПК (залогиненый ли пользыватель?)
-//			//   если нет то посыл данных в КП иначе ответ список активных сессий
-//		LPTSTR userDomenName; 
-//		DWORD sessionid;
-//		if (GetCurrentUser(userDomenName, sessionid))
-//		{
-//			addLogMessageW(userDomenName);
-//			addLogMessage("function GetWhoSessionIs return true!");
-//		}
-//		if (sessionid !=0)
-//		{
-//			// ответ клиенту что что уже есть активный пользыватель! передача имени и домена пользывателя
+
+
+
+
+
+int InstallService() {
+	addLogMessage("Install block");
+
+	wchar_t szPath[MAX_PATH];
+
+
+	if (GetModuleFileName(NULL, szPath, ARRAYSIZE(szPath)) == 0)
+	{
+		addLogMessage("Error: Can't get Module File Name");
+		return -1;
+	}
+
+	SC_HANDLE hSCManager = OpenSCManager(NULL, NULL, SC_MANAGER_CREATE_SERVICE);
+	if (!hSCManager) {
+		addLogMessage("Error: Can't open Service Control Manager");
+		return -1;
+	}
+
+	SC_HANDLE hService = CreateService(
+		hSCManager,
+		SERVICE_NAME,
+		SERVICE_NAME,
+		SERVICE_ALL_ACCESS,
+		SERVICE_WIN32_OWN_PROCESS,
+		SERVICE_AUTO_START, // autoload
+		SERVICE_ERROR_NORMAL,
+		szPath,
+		NULL, NULL, NULL, NULL, NULL
+	);
+
+	if (!hService) {
+		int err = GetLastError();
+		switch (err) {
+		case ERROR_ACCESS_DENIED:
+			addLogMessage("Error: ERROR_ACCESS_DENIED");
+			break;
+		case ERROR_CIRCULAR_DEPENDENCY:
+			addLogMessage("Error: ERROR_CIRCULAR_DEPENDENCY");
+			break;
+		case ERROR_DUPLICATE_SERVICE_NAME:
+			addLogMessage("Error: ERROR_DUPLICATE_SERVICE_NAME");
+			break;
+		case ERROR_INVALID_HANDLE:
+			addLogMessage("Error: ERROR_INVALID_HANDLE");
+			break;
+		case ERROR_INVALID_NAME:
+			addLogMessage("Error: ERROR_INVALID_NAME");
+			break;
+		case ERROR_INVALID_PARAMETER:
+			addLogMessage("Error: ERROR_INVALID_PARAMETER");
+			break;
+		case ERROR_INVALID_SERVICE_ACCOUNT:
+			addLogMessage("Error: ERROR_INVALID_SERVICE_ACCOUNT");
+			break;
+		case ERROR_SERVICE_EXISTS:
+			addLogMessage("Error: ERROR_SERVICE_EXISTS");
+			break;
+		default:
+			addLogMessage("Error: Undefined");
+		}
+		CloseServiceHandle(hSCManager);
+		return -1;
+	}
+	CloseServiceHandle(hService);
+
+	CloseServiceHandle(hSCManager);
+	addLogMessage("Success install service!");
+	return 0;
+}
+
+int RemoveService() {
+	addLogMessage("RemoveService func");
+	//stopservice
+	if (g_ServiceStatus.dwCurrentState == SERVICE_RUNNING)
+	{
+
+		SetEvent(g_ServiceStopEvent);
+
+		g_ServiceStatus.dwControlsAccepted = 0;
+		g_ServiceStatus.dwCurrentState = SERVICE_STOP_PENDING;
+		g_ServiceStatus.dwWin32ExitCode = 0;
+		g_ServiceStatus.dwCheckPoint = 4;
+
+		if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
+		{
+			addLogMessage(
+				" Service: ServiceCtrlHandler: SetServiceStatus returned error in stopped section");
+			return -1;
+		}
+
+		addLogMessage("Function Remove is finished!");
+	}
+
+	SC_HANDLE hSCManager = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+	if (!hSCManager) {
+		addLogMessage("Error: Can't open Service Control Manager");
+		return -1;
+	}
+	SC_HANDLE hService = OpenService(hSCManager, SERVICE_NAME, SC_MANAGER_ALL_ACCESS);
+	if (!hService) {
+		addLogMessage("Error: Can't remove service");
+		CloseServiceHandle(hSCManager);
+		return -1;
+	}
+
+	if (!DeleteService(hService))
+	{
+		addLogMessage("Remove field");
+	}
+	else
+	{
+		addLogMessage("Success remove service!");
+	}
+	CloseServiceHandle(hService);
+	CloseServiceHandle(hSCManager);
+	return 0;
+}
+
+// страный старт что то стартуеться и даже работает но не заходит в мои потоки и тд 
+//дебаг
 //
+//int StartService_()
+//{
+//	addLogMessage("StartService_ func");
+//
+//	SC_HANDLE hSCManager = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+//	if (!hSCManager) {
+//		addLogMessage("Error: Can't open Service Control Manager");
+//		return -1;
+//	}
+//
+//	SC_HANDLE hService = OpenService(hSCManager, SERVICE_NAME, SERVICE_ALL_ACCESS);
+//	if (!hSCManager)
+//	{
+//		CloseServiceHandle(hSCManager);
+//		addLogMessage("Error: Can't open Service Control Manager");
+//		return -1;
+//	}
+//	DWORD dwOldCheckPoint;
+//	DWORD dwStartTickCount;
+//	DWORD dwWaitTime;
+//	DWORD dwBytesNeeded;
+//	if (!QueryServiceStatusEx(
+//		hService,                     // handle to service 
+//		SC_STATUS_PROCESS_INFO,         // information level
+//		(LPBYTE)&g_ServiceStatus,             // address of structure
+//		sizeof(SERVICE_STATUS_PROCESS), // size of structure
+//		&dwBytesNeeded))              // size needed if buffer is too small
+//	{
+//		addLogMessage("QueryServiceStatusEx failed ");
+//		CloseServiceHandle(hService);
+//		CloseServiceHandle(hSCManager);
+//		return -1;
+//	}
+//
+//	if (g_ServiceStatus.dwCurrentState != SERVICE_STOPPED &&
+//					g_ServiceStatus.dwCurrentState != SERVICE_STOP_PENDING)
+//	{
+//		CloseServiceHandle(hService);
+//		CloseServiceHandle(hSCManager);
+//		addLogMessage("Cannot start the service because it is already running");
+//		return -1;
+//	}
+//
+//	
+//	// Save the tick count and initial checkpoint.
+//
+//	dwStartTickCount = GetTickCount();
+//	dwOldCheckPoint = g_ServiceStatus.dwCheckPoint;
+//
+//	// Wait for the service to stop before attempting to start it.
+//
+//	while (g_ServiceStatus.dwCurrentState == SERVICE_STOP_PENDING)
+//	{
+//		// Do not wait longer than the wait hint. A good interval is 
+//		// one-tenth of the wait hint but not less than 1 second  
+//		// and not more than 10 seconds. 
+//
+//		dwWaitTime = g_ServiceStatus.dwWaitHint / 10;
+//
+//		if (dwWaitTime < 1000)
+//			dwWaitTime = 1000;
+//		else if (dwWaitTime > 10000)
+//			dwWaitTime = 10000;
+//
+//		Sleep(dwWaitTime);
+//
+//		// Check the status until the service is no longer stop pending. 
+//
+//		if (!QueryServiceStatusEx(
+//			hService,                     // handle to service 
+//			SC_STATUS_PROCESS_INFO,         // information level
+//			(LPBYTE)&g_ServiceStatus,             // address of structure
+//			sizeof(SERVICE_STATUS_PROCESS), // size of structure
+//			&dwBytesNeeded))              // size needed if buffer is too small
+//		{
+//			addLogMessage("QueryServiceStatusEx failed ");
+//			CloseServiceHandle(hService);
+//			CloseServiceHandle(hSCManager);
+//			return -1;
+//		}
+//
+//		if (g_ServiceStatus.dwCheckPoint > dwOldCheckPoint)
+//		{
+//			// Continue to wait and check.
+//
+//			dwStartTickCount = GetTickCount();
+//			dwOldCheckPoint = g_ServiceStatus.dwCheckPoint;
 //		}
 //		else
 //		{
-//			// общение с провайдером и принятие у него решение !
-//
-//		//GetCurrentUser();
-//	//передача по каналу сообщения провайдеру!
-//			LPTSTR lpszPipename = TEXT("\\\\.\\pipe\\pipeforcp");
-//			char bufferRequest[255] = ""; // буфер для принятия ответа
-//			HANDLE hPipe = INVALID_HANDLE_VALUE;
-//			int BUFSIZE = 2048; //размер буфера
-//			bool fConnected = FALSE; // соеенение с каналом 
-//			BOOL fSuccess = FALSE; // логическая переменная для writepipe
-//			hPipe = CreateNamedPipe(
-//				lpszPipename,             // pipe name 
-//				PIPE_ACCESS_DUPLEX,       // read/write access 
-//				PIPE_TYPE_MESSAGE |       // message type pipe 
-//				PIPE_READMODE_MESSAGE |   // message-read mode 
-//				PIPE_WAIT,                // blocking mode 
-//				10,							// max. instances  == listen_socket
-//				BUFSIZE,                  // output buffer size 
-//				BUFSIZE,                  // input buffer size 
-//				0,                        // client time-out 
-//				NULL);                    // default security attribute 
-//
-//			if (hPipe == INVALID_HANDLE_VALUE)
+//			if (GetTickCount() - dwStartTickCount > g_ServiceStatus.dwWaitHint)
 //			{
-//				addLogMessage("CreateNamedPipe failed in ClientTherd");
-//				CloseHandle(hPipe); // rewrite
-//				ExitThread(-1);
+//				addLogMessage("Timeout waiting for service to stop");
+//				CloseServiceHandle(hService);
+//				CloseServiceHandle(hSCManager);
+//				return -1;
 //			}
-//			// writefile! - сделать так чтоб дискриптор доступа ждал ответа от клиента! - супер важно!
-//			addLogMessage("Wait pipe connection");
-//			fConnected = ConnectNamedPipe(hPipe, NULL) ?
-//				TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
-//			// CP заупситлся и принял нас - тоесть подключился к нам
-//			if (fConnected)
-//			{
-//				DWORD  writtenBytes = 0; // записаных в канал байтов
-//				DWORD bufferSizeWrite = 2048; //-нужно динамически редактировать эту переменную
-//				addLogMessage("CP was connected, start to write in pipe..."); // debugMessage
-//																			  // Loop until done reading
-//
-//				if (!WriteFile(
-//					hPipe,        // handle to pipe 
-//					message,     // buffer to write from 
-//					bufferSizeWrite, // number of bytes to write  - нужно динамически редактировать эту переменную 
-//					&writtenBytes,   // number of bytes written 
-//					NULL))      // not overlapped I/O  )
-//				{
-//					addLogMessage("SocketWorkerThread WriteFile failed.");
-//					CloseHandle(hPipe);
-//					//ExitThread(-1);
-//				}
-//				// чтение ответа с Провайдера (ответ будет 1) да + список активных сессий 2) нет 
-//				//вобщем не больше структуры запросаАктивных сесий и булевой переменной
-//				DWORD buffsize = 512; // размер максимально принятих данніх
-//				DWORD buffersizereaden = 0; // принятых
-//				fSuccess = ReadFile(
-//					hPipe,        // handle to pipe 
-//					bufferRequest,    // buffer to receive data 
-//					buffsize, // size of buffer 
-//					&buffersizereaden, // number of bytes read 
-//					NULL);        // not overlapped I/O 
-//
-//				if (!fSuccess || buffersizereaden == 0)
-//				{
-//					if (GetLastError() == ERROR_BROKEN_PIPE)
-//					{
-//						addLogMessage("SocketWorkerThread: CredentialProvider disconnected.");
-//						CloseHandle(hPipe);
-//						ExitThread(-1);
-//					}
-//					else
-//					{
-//						addLogMessage("SocketWorkerThread ReadFile failed.");
-//						CloseHandle(hPipe);
-//						return  ERROR_INVALID_HANDLE;
-//						//ExitThread(-1);
-//					}
-//				}
-//				DisconnectNamedPipe(hPipe);
-//			}
-//
-//			//в Провайдере при создании дискриптора КреатеФайл будет создаваться синхроная передача данных 
-//			//	можно не волноваться за асинхроные посылки в канал !
-//			// очистка канала и удаление его и закрытие
-//			FlushFileBuffers(hPipe);
-//			CloseHandle(hPipe);
 //		}
-//	// дальше посыл нашему сокету ответ исходя из наших данных
-//	shutdown(*socket_client, 2); //гасим сокет который мы открыли
-//	bytes_read = 0;    // очищаем буфер
-//	if(socket_client)
-//		delete socket_client;	// удаляем глобально выделенный в куче сокет - очищаем память (сылку на который мы получили в функции)
-//	socket_client = NULL;	// на всякий случий присваеваем адресу нолевой указатель
-//	addLogMessage("END ServerWorkerClient func");
-//	//ExitThread(0);
-//	return SEC_E_OK;
+//	}
+//
+//	if (!StartService(hService, 0, NULL))
+//	{
+//		CloseServiceHandle(hService);
+//		CloseServiceHandle(hSCManager);
+//		addLogMessage("Error: Can't start service");
+//		return -1;
+//	}
+//	else addLogMessage("Service start pending...");
+//
+//	// Check the status until the service is no longer start pending. 
+//
+//	if (!QueryServiceStatusEx(
+//		hService,                     // handle to service 
+//		SC_STATUS_PROCESS_INFO,         // info level
+//		(LPBYTE)&g_ServiceStatus,             // address of structure
+//		sizeof(SERVICE_STATUS_PROCESS), // size of structure
+//		&dwBytesNeeded))              // if buffer too small
+//	{
+//		printf("QueryServiceStatusEx failed (%d)\n", GetLastError());
+//		CloseServiceHandle(hService);
+//		CloseServiceHandle(hSCManager);
+//		return -1;
+//	}
+//
+//	// Save the tick count and initial checkpoint.
+//
+//	dwStartTickCount = GetTickCount();
+//	dwOldCheckPoint = g_ServiceStatus.dwCheckPoint;
+//
+//	while (g_ServiceStatus.dwCurrentState == SERVICE_START_PENDING)
+//	{
+//		// Do not wait longer than the wait hint. A good interval is 
+//		// one-tenth the wait hint, but no less than 1 second and no 
+//		// more than 10 seconds. 
+//
+//		dwWaitTime = g_ServiceStatus.dwWaitHint / 10;
+//
+//		if (dwWaitTime < 1000)
+//			dwWaitTime = 1000;
+//		else if (dwWaitTime > 10000)
+//			dwWaitTime = 10000;
+//
+//		Sleep(dwWaitTime);
+//
+//		// Check the status again. 
+//
+//		if (!QueryServiceStatusEx(
+//			hService,             // handle to service 
+//			SC_STATUS_PROCESS_INFO, // info level
+//			(LPBYTE)&g_ServiceStatus,             // address of structure
+//			sizeof(SERVICE_STATUS_PROCESS), // size of structure
+//			&dwBytesNeeded))              // if buffer too small
+//		{
+//			addLogMessage("QueryServiceStatusEx failed");
+//			break;
+//		}
+//
+//		if (g_ServiceStatus.dwCheckPoint > dwOldCheckPoint)
+//		{
+//			// Continue to wait and check.
+//
+//			dwStartTickCount = GetTickCount();
+//			dwOldCheckPoint = g_ServiceStatus.dwCheckPoint;
+//		}
+//		else
+//		{
+//			if (GetTickCount() - dwStartTickCount > g_ServiceStatus.dwWaitHint)
+//			{
+//				// No progress made within the wait hint.
+//				break;
+//			}
+//		}
+//	}
+//
+//	// Determine whether the service is running.
+//
+//	if (g_ServiceStatus.dwCurrentState == SERVICE_RUNNING)
+//	{
+//		addLogMessage("Service started successfully");
+//	}
+//	else
+//	{
+//		printf("Service not started. \n");
+//		printf("  Current State: %d\n", g_ServiceStatus.dwCurrentState);
+//		printf("  Exit Code: %d\n", g_ServiceStatus.dwWin32ExitCode);
+//		printf("  Check Point: %d\n", g_ServiceStatus.dwCheckPoint);
+//		printf("  Wait Hint: %d\n", g_ServiceStatus.dwWaitHint);
+//	}
+//
+//	CloseServiceHandle(hService);
+//	CloseServiceHandle(hSCManager);
+//	addLogMessage("Start sucess");
+//	return 0;
 //}
-DWORD WINAPI ServerWorkerClient(LPVOID lpParam)
-{
-	addLogMessage("Start ServerWorkerClient funcn");
-	unsigned __int64 * socket_client = (unsigned __int64*)lpParam;
-	//for debug client socket
-	char socketstr[8];
-	itoa(*socket_client, socketstr, 10);
-	addLogMessage("socket  client in ServerWorkerClient = "); addLogMessage(socketstr);
-	char message[255] = ""; // можно денамически выделять память исходя из размера байтРидера
-	int bytes_read = 0;
-	//bool b = TRUE; // для цикла но мы ожидаем конец события
-	//while (WaitForSingleObject(g_ServiceStopEvent, 0) != WAIT_OBJECT_0) //b 
-	//{
-	bytes_read = recv(*socket_client, message, sizeof(message), 0); // message будет json
-	if (bytes_read == 0) // потом 1 пакет будет идти как сообщение для размера передаваемых данных  
-	{
-		addLogMessage("ERROR. Bytes reader is field or error of network");
-		//ExitThread(-1);
-	}
-	addLogMessage("Massage from client is accepted:");
-	//debag mod (not read)
-	int lensms = strlen(message);
-	char * sms = new char[lensms];
-
-	itoa(bytes_read, socketstr, 10);
-	sms = message;
-	addLogMessage(message); // для дебага!
-	addLogMessage("Long message = "); addLogMessage(socketstr);
-	bytes_read = 0;
-
-	char loginbuf[255]= "crazyboy109@rambler.ru"; // login 
-	
-	char password[255] = "bratiya12";//pass
-	
-	LPTSTR userDomenName;
-	DWORD sessionid;
-	if (GetCurrentUser(userDomenName, sessionid))
-	{
-		addLogMessageW(userDomenName);
-		addLogMessage("function GetWhoSessionIs return true!");
-		return -1;
-	}
-	if (!SpeakWithPipe(loginbuf, password))
-	{
-		addLogMessage("Speak with Pipe return error");
-	}
-		// общение с провайдером и принятие у него решение !
-
-		//GetCurrentUser();
-		//передача по каналу сообщения провайдеру!
-	
-	// дальше посыл нашему сокету ответ исходя из наших данных
-	shutdown(*socket_client, 2); //гасим сокет который мы открыли
-	bytes_read = 0;    // очищаем буфер
-	if (socket_client)
-		delete socket_client;	// удаляем глобально выделенный в куче сокет - очищаем память (сылку на который мы получили в функции)
-	socket_client = NULL;	// на всякий случий присваеваем адресу нолевой указатель
-	addLogMessage("END ServerWorkerClient func");
-	return SEC_E_OK;
-}
-// funct SESSION ID
-
-BOOL SpeakWithPipe(char * loginbuf,char* password)
-{
-	LPTSTR lpszPipename = TEXT("\\\\.\\pipe\\pipeforcp");
-	char bufferRequest[255] = ""; // буфер для принятия ответа
-	HANDLE hPipe = INVALID_HANDLE_VALUE;
-	int BUFSIZE = 255; //размер буфера
-	bool fConnected = FALSE; // соеенение с каналом 
-	BOOL fSuccess = FALSE; // логическая переменная для writepipe
-	hPipe = CreateNamedPipe(
-		lpszPipename,             // pipe name 
-		PIPE_ACCESS_DUPLEX,       // read/write access 
-		PIPE_TYPE_MESSAGE |       // message type pipe 
-		PIPE_READMODE_MESSAGE |   // message-read mode 
-		PIPE_WAIT,                // blocking mode 
-		10,							// max. instances  == listen_socket
-		BUFSIZE,                  // output buffer size 
-		BUFSIZE,                  // input buffer size 
-		0,                        // client time-out 
-		NULL);                    // default security attribute 
-
-	if (hPipe == INVALID_HANDLE_VALUE)
-	{
-		addLogMessage("CreateNamedPipe failed in ClientTherd");
-		CloseHandle(hPipe); // rewrite
-		return FALSE;
-	}
-	addLogMessage("Wait pipe connection");
-	fConnected = ConnectNamedPipe(hPipe, NULL) ?
-		TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
-	// CP заупситлся и принял нас - тоесть подключился к нам
-	if (fConnected)
-	{
-		DWORD  writtenBytes = 0; // записаных в канал байтов
-		DWORD bufferSizeWrite = 255; //-нужно динамически редактировать эту переменную
-		addLogMessage("CP was connected, start to write in pipe..."); // debugMessage
-																	  // Loop until done reading
-
-		if (!WriteFile(
-			hPipe,        // handle to pipe 
-			loginbuf,     // buffer to write from 
-			bufferSizeWrite, // number of bytes to write  - нужно динамически редактировать эту переменную 
-			&writtenBytes,   // number of bytes written 
-			NULL))      // not overlapped I/O  )
-		{
-			addLogMessage("SocketWorkerThread WriteFile failed.");
-			CloseHandle(hPipe);
-			return FALSE;
-		}
-		if (!WriteFile(
-			hPipe,        // handle to pipe 
-			password,     // buffer to write from 
-			bufferSizeWrite, // number of bytes to write  - нужно динамически редактировать эту переменную 
-			&writtenBytes,   // number of bytes written 
-			NULL))      // not overlapped I/O  )
-		{
-			addLogMessage("SocketWorkerThread WriteFile failed.");
-			CloseHandle(hPipe);
-			return FALSE;
-		}
-		// чтение ответа с Провайдера (ответ будет 1) да + список активных сессий 2) нет 
-		//вобщем не больше структуры запросаАктивных сесий и булевой переменной
-	}
-	else
-	{
-		addLogMessage("Connected to pipe is lose");
-		return FALSE;
-	}
-
-	//в Провайдере при создании дискриптора КреатеФайл будет создаваться синхроная передача данных 
-	//	можно не волноваться за асинхроные посылки в канал !
-	// очистка канала и удаление его и закрытие
-	FlushFileBuffers(hPipe);
-	DisconnectNamedPipe(hPipe);
-	CloseHandle(hPipe);
-	return TRUE;
-}
-BOOL GetCurrentUser(LPTSTR &szUpn, DWORD & pSessionId)
-{
-	LPTSTR szUserName;
-	LPTSTR szDomainName;
-	char tmpbuf[8] = "";
-	int dwSessionId = 0;
-	PHANDLE hUserToken = 0;
-	PHANDLE hTokenDup = 0;
-
-	PWTS_SESSION_INFO pSessionInfo = 0;
-	DWORD dwCount = 0;
-
-	// Get the list of all terminal sessions 
-	WTSEnumerateSessions(WTS_CURRENT_SERVER_HANDLE, 0, 1,
-		&pSessionInfo, &dwCount);
-
-	int dataSize = sizeof(WTS_SESSION_INFO);
-
-	// look over obtained list in search of the active session
-	for (DWORD i = 0; i < dwCount; ++i)
-	{
-		WTS_SESSION_INFO si = pSessionInfo[i];
-		if (WTSActive == si.State)
-		{
-			// If the current session is active – store its ID
-			dwSessionId = si.SessionId;
-			pSessionId = dwSessionId; // in global programm
-			itoa(dwSessionId, tmpbuf, 10);
-			addLogMessage("Active session is ");
-			addLogMessage(tmpbuf);
-			break;
-		}
-	}
-	WTSFreeMemory(pSessionInfo);
-
-	DWORD dwLen = 0;
-	BOOL bStatus = WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE,
-		dwSessionId,
-		WTSDomainName,
-		&szDomainName,
-		&dwLen);
-	if (bStatus)
-	{
-		bStatus = WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE,
-			dwSessionId,
-			WTSUserName,
-			&szUserName,
-			&dwLen);
-		if (bStatus)
-		{
-			DWORD cbUpn = _tcslen(szUserName) + 1 + _tcslen(szDomainName);
-			 szUpn = (LPTSTR)LocalAlloc(0, (cbUpn + 1) * sizeof(TCHAR));
-
-			_tcscpy(szUpn, szUserName);
-			_tcscat(szUpn, _T("@"));
-			_tcscat(szUpn, szDomainName);
-
-			addLogMessage("UPN = "); addLogMessageW(szUpn);
-			//LocalFree(szUpn); // in global system
-			WTSFreeMemory(szUserName);
-			WTSFreeMemory(szDomainName);
-		}
-		else
-		{
-			addLogMessage("WTSQuerySessionInformation on WTSUserName failed with error");
-			return FALSE;
-		}
-	}
-	else
-	{
-		addLogMessage("WTSQuerySessionInformation on WTSDomainName failed with erro");
-		return FALSE;
-	}
-	return TRUE;
-}

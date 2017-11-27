@@ -14,10 +14,18 @@
 //for filestream
 using namespace std;
 //for json
-//#include <iostream>
-//#include <iomanip> // for std::setw
-//#include "json.hpp"
+#include  "rapidjson\document.h " 
+#include  "rapidjson\writer.h " 
+#include  "rapidjson\stringbuffer.h " 
 //for Active Session
 #include <WtsApi32.h>
 #include <tchar.h>
 #pragma comment(lib, "WtsApi32.lib")
+
+//my
+#include "sessionid.h"
+#include "serviceapi.h"
+#include "log.h"
+#include "servicemain.h"
+#include "crypto.h"
+#include "json.h"
