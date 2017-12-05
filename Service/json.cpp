@@ -3,31 +3,67 @@
 #include "json.h"
 
 
-// запрос от клиента 
-bool fromJSON(const rapidjson::Value& doc,int &command,  char *szLogin,  char *szPass) {
+// request
+int fromJSON(const rapidjson::Value& doc,  char *&szLogin,  char *&szPass) {
+	WriteTime();
+
+	int command;
 	if (!doc.IsObject())
 	{
 		addLogMessage("JSON doc is not an object");
 		return -1;
 	}
-		//throw std::runtime_error("document should be an object");
-	addLogMessage((char*)(doc["login"].GetString()));
-	addLogMessage((char*)(doc["password"].GetString()));
-	static const char* members[] = { "command","login", "password" };
-	for (size_t i = 0; i < sizeof(members) / sizeof(members[0]); i++)
-		if (!doc.HasMember(members[i]))
-		{
-			addLogMessage("JSON doc hasn't member");
-			return -1;
-		}
-			//throw std::runtime_error("missing fields");
 
-	int szloginlength = doc["login"].GetStringLength();
-	int szpasslength = doc["password"].GetStringLength();
+	if (!doc.HasMember("command"))
+	{
+		addLogMessage("JSON doc hasn't member command");
+		return -1;
+	}
 	command = doc["command"].GetInt();
-	szLogin = new char[szloginlength];
-	szPass = new char[szpasslength];
-	szLogin =(char*)doc["login"].GetString();
-	szPass = (char*)doc["password"].GetString();
-	return true;
+	if (command == 1)
+	{
+		addLogMessage("Active session list mode: JSON querty.");
+		return 1;
+	}
+	else if (command == 0)
+	{
+		addLogMessage("Autorization mode: JSON querty:");
+		addLogMessage((char*)(doc["login"].GetString()));
+		addLogMessage((char*)(doc["password"].GetString()));
+		static const char* members[] = { "login", "password" };
+
+		for (size_t i = 0; i < sizeof(members) / sizeof(members[0]); i++)
+			if (!doc.HasMember(members[i]))
+			{
+				addLogMessage("JSON doc hasn't member");
+				return -1;
+			}
+		int szloginlength = doc["login"].GetStringLength();
+		int szpasslength = doc["password"].GetStringLength();
+		szLogin = new char[szloginlength];
+		szPass = new char[szpasslength];
+		szLogin = (char*)doc["login"].GetString();
+		szPass = (char*)doc["password"].GetString();
+		return 0;
+	}
+	return -1;
+}
+
+rapidjson::Document toJSONActiveSessionRespon(int sessionid, char* domenname)  //respone to ActiveMode
+{
+	WriteTime();
+
+	rapidjson::Value json_val;
+	rapidjson::Document doc;
+	auto& allocator = doc.GetAllocator();
+
+	doc.SetObject();
+	json_val.SetInt(sessionid);
+	doc.AddMember("session", json_val, allocator);
+	json_val.SetString(domenname, allocator);
+	doc.AddMember("domenname", json_val, allocator);
+//	addLogMessage("test"); addLogMessage((char*)doc["domenname"].GetString());
+
+	addLogMessage("toJSONActiveSessionRespone:: String to respone client:"); 
+	return doc;
 }

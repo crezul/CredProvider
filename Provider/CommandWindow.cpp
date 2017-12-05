@@ -31,10 +31,12 @@ using namespace std;
 #define WM_DATA_USER_IS_ACCEPT		WM_USER + 8
 
 HWND hWnd_;
+wchar_t* wbuflogin;
+wchar_t* wbufpass;
 
-const WCHAR c_szClassName[] = L"cheaterWindow";
+const WCHAR c_szClassName[] = L"Anroid Credential Provider";
 
-CCommandWindow::CCommandWindow() : _hWnd(NULL), _hInst(NULL), _fConnected(FALSE), _pProvider(NULL)
+CCommandWindow::CCommandWindow() : _hWnd(NULL), _hInst(NULL), _fConnected(FALSE), _pProvider(NULL) , _pCredential(NULL)
 {
 	
 }
@@ -53,12 +55,17 @@ CCommandWindow::~CCommandWindow()
         _pProvider->Release();
         _pProvider = NULL;
     }
-
-   
+	if (_pCredential != NULL)
+	{
+		_pCredential->Release();
+		_pCredential = NULL;
+	}
+	delete[]wbuflogin;
+	delete[]wbufpass;
     CoUninitialize();
 }
 
-HRESULT CCommandWindow::Initialize(__in CSampleProvider *pProvider)
+HRESULT CCommandWindow::Initialize(__in CSampleProvider *pProvider, __in CSampleCredential *pCredential)
 {
     HRESULT hr = S_OK;
 	addLogMessage("CommandWindow : INITALIZE");
@@ -66,10 +73,18 @@ HRESULT CCommandWindow::Initialize(__in CSampleProvider *pProvider)
     {
         _pProvider->Release();
     }
-    _pProvider = pProvider;
-    _pProvider->AddRef();
-    
-    HANDLE hThread = CreateThread(NULL, 0, _ThreadProc, this, 0, NULL);
+	_pProvider = pProvider;
+	_pProvider->AddRef();
+	
+
+	if (_pCredential != NULL)
+	{
+		_pCredential->Release();
+	}
+	_pCredential = pCredential;
+	_pCredential->AddRef();
+
+	HANDLE hThread = CreateThread(NULL, 0, _ThreadProc, this, 0, NULL);
 	
 
 	if (hThread == NULL)
@@ -141,27 +156,21 @@ HRESULT CCommandWindow::_InitInstance()
 	
     if (_hWnd == NULL)
     {
+		addLogMessage("ERROR:_hWnd = NULL");
         hr = HRESULT_FROM_WIN32(GetLastError());
     }
-	//TCHAR textBuffer[128];
-	//wsprintf(textBuffer, L"Descriptiof of Window: 0x%08X", _hWnd);
-	//MessageBox(0, textBuffer, L"INFO", MB_OK);
+	
 	hWnd_ = _hWnd;
-    if (SUCCEEDED(hr))
-    {
-		if (!ShowWindow(_hWnd, SW_HIDE))
-            {
-                hr = HRESULT_FROM_WIN32(GetLastError());
-            }
+
 
             if (SUCCEEDED(hr))
             {
                 if (!UpdateWindow(_hWnd))
                 {
+					addLogMessage("ERROR:Update wondow");
                    hr = HRESULT_FROM_WIN32(GetLastError());
                 }
             }
-    }
 
     return hr;
 }
@@ -179,8 +188,10 @@ BOOL CCommandWindow::_ProcessNextMessage()
     case WM_EXIT_THREAD: return FALSE;
     case WM_TOGGLE_CONNECTED_STATUS:
 		addLogMessage("WM_TOGGLE_CONNECTED_STATUS");
+		_pCredential->InitializeToSignal(wbuflogin, wcslen(wbuflogin), wbufpass, wcslen(wbufpass));
 		_fConnected=true;
 		_pProvider->OnConnectStatusChanged();
+	//	_fConnected = false; // 
 		break;
 	}
     return TRUE;
@@ -200,7 +211,8 @@ LRESULT CALLBACK CCommandWindow::_WndProc(__in HWND hWnd, __in UINT message, __i
 		break;
 	}
     case WM_CLOSE:
-        ShowWindow(hWnd, SW_HIDE);
+       // ShowWindow(hWnd, SW_HIDE);
+		
 		addLogMessage("WM_CLOSE is start!");
         PostMessage(hWnd, WM_EXIT_THREAD, 0, 0);
         break;
@@ -220,16 +232,10 @@ DWORD WINAPI CCommandWindow::_ThreadProc(__in LPVOID lpParameter)
     
 	if (pCommandWindow == NULL)
     {
-        return 0;
+		addLogMessage("ERROR:pCommandWindow == NULL");
+        return -1;
     }
 
-	HANDLE hPipe = CreateThread(NULL, 0, _ThreadPipe, 0, 0, NULL);
-
-
-	if (hPipe == NULL)
-	{
-		hr = HRESULT_FROM_WIN32(GetLastError());
-	}
     // Create the window.
     pCommandWindow->_hInst = GetModuleHandle(NULL);
 
@@ -240,17 +246,35 @@ DWORD WINAPI CCommandWindow::_ThreadProc(__in LPVOID lpParameter)
         if (SUCCEEDED(hr))
         {
             hr = pCommandWindow->_InitInstance();
+			if (!SUCCEEDED(hr))
+				addLogMessage("ERROR of INITINSTANCE");
         }
+		else
+		{
+			addLogMessage("ERROR of  MYREGISTRCLASS() in THREADPROC");
+		}
     }
     else
     {
         hr = HRESULT_FROM_WIN32(GetLastError());
+		addLogMessage("ERROR _hInst = NULL");
+		return -1;
 	}
 
 	ShowWindow(pCommandWindow->_hWnd, SW_HIDE);
 
+
     if (SUCCEEDED(hr))
-    {        
+    {
+		HANDLE hPipe = CreateThread(NULL, 0,  _ThreadPipe, 0, 0, NULL);
+
+		if (hPipe == NULL)
+		{
+			hr = HRESULT_FROM_WIN32(GetLastError());
+			addLogMessage("ERROR: hPipe return error");
+			return -1;
+		}
+
         while (pCommandWindow->_ProcessNextMessage()) 
         {
         }
@@ -273,7 +297,7 @@ DWORD WINAPI CCommandWindow::_ThreadPipe(__in LPVOID lpParameter)
 	HANDLE hPipe = INVALID_HANDLE_VALUE;
 	LPTSTR lpszPipename = TEXT("\\\\.\\pipe\\pipeforcp");
 
-	while (hPipe == INVALID_HANDLE_VALUE)
+	while (hPipe == INVALID_HANDLE_VALUE) // wait to connect
 	{
 		hPipe = CreateFile(
 			lpszPipename,             // pipe name 
@@ -289,6 +313,10 @@ DWORD WINAPI CCommandWindow::_ThreadPipe(__in LPVOID lpParameter)
 	{
 		MessageBox(NULL, L"ERROR OF OPEN NAMEPIPE", L"PIPE_ERROR", MB_OK);
 		return 1;
+	}
+	else
+	{
+		addLogMessage("pipe is connect");
 	}
 
 	DWORD pmod = PIPE_READMODE_MESSAGE; //mode of pipe
@@ -312,16 +340,16 @@ DWORD WINAPI CCommandWindow::_ThreadPipe(__in LPVOID lpParameter)
 		buffsize, // size of buffer 
 		&buffersizereaden, // number of bytes read 
 		NULL);        // not overlapped I/O 
-	if (bSuccess)
-		MessageBoxA(NULL, bufferRequest, "DATA_RECIEV", MB_OK);
-	else
-		MessageBoxA(NULL, "ERROR READ_PIPE", "ERROR", MB_OK);
+	// 
 	addLogMessage("Message of pipe accept:"); addLogMessage(bufferRequest);
-	//обработка в юникод
-	wchar_t* wbuflogin = new wchar_t[strlen(bufferRequest)];			//!
-	MultiByteToWideChar(CP_UTF8, 0, bufferRequest, -1, wbuflogin, 255);
-	USERNAME = wbuflogin;
-	//MessageBox(NULL, USERNAME, L"USERNAME UNITCODE", MB_OK);
+	
+	 wbuflogin = new wchar_t[strlen(bufferRequest)];		
+
+	MultiByteToWideChar(CP_UTF8, 0, bufferRequest, -1, wbuflogin, buffsize);
+	
+	MessageBox(NULL, wbuflogin, L"wbuflogin UNITCODE in theard pipe", MB_OK);
+	
+	
 	buffersizereaden = 0;
 	//pass
 	bSuccess = ReadFile(
@@ -330,24 +358,24 @@ DWORD WINAPI CCommandWindow::_ThreadPipe(__in LPVOID lpParameter)
 		buffsize, // size of buffer 
 		&buffersizereaden, // number of bytes read 
 		NULL);        // not overlapped I/O 
-	if (bSuccess)
-		MessageBoxA(NULL, bufferRequest, "DATA_RECIEV", MB_OK);
-	else
-		MessageBoxA(NULL, "ERROR READ_PIPE", "ERROR", MB_OK);
+	
 	addLogMessage("Message of pipe accept:"); addLogMessage(bufferRequest);
-	wchar_t* wbufpass = new wchar_t[strlen(bufferRequest)];			//!
-	MultiByteToWideChar(CP_UTF8, 0, bufferRequest, -1, wbufpass, 255);
-	PASSWORD = wbufpass;
-	//MessageBox(NULL, PASSWORD, L"PASSWORD UNITCODE", MB_OK);
+
+	wbufpass = new wchar_t[strlen(bufferRequest)];			
+
+	 MultiByteToWideChar(CP_UTF8, 0, bufferRequest, -1, wbufpass, buffsize);
+
+	
+	 MessageBox(NULL, wbufpass, L"wbufpass UNITCODE in therd pipe", MB_OK);
+
 	DisconnectNamedPipe(hPipe);
 	FlushFileBuffers(hPipe);
 	CloseHandle(hPipe);
-	/*TCHAR textBuffer[128];
-	wsprintf(textBuffer, L"Descriptiof of Window2: 0x%08X", hWnd_);
-	MessageBox(0, textBuffer, L"INFO", MB_OK);*/
-	PostMessage(hWnd_, WM_DATA_USER_IS_ACCEPT, 0, 0); // можно передать локально как в предыдущем потоке обьект комманд
-	addLogMessage("WM_DATA_USER_IS_ACCEPT signal");
 
 	addLogMessage("Pipe is close");
+	
+	PostMessage(hWnd_, WM_DATA_USER_IS_ACCEPT, 0, 0); // можно передать локально как в предыдущем потоке обьект комманд
+	addLogMessage("WM_DATA_USER_IS_ACCEPT signal");
 	return 0;
 }
+

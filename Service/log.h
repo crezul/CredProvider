@@ -3,6 +3,10 @@
 #include "inclfiles.h"
 
 
-void addLogMessageW(LPTSTR );
-void addLogMessage(char *);
+static char * fstremname = "C:\\Users\\Danil\\Desktop\\Service_android_provider.txt"; //local directory to LocalUser
+void addLogMessage(LPTSTR ch);
+void addLogMessage(char *ch);
+void addLogMessage(unsigned __int64 ch);
+bool isfstream();
+void WriteTime();
 

@@ -3,4 +3,5 @@
 #pragma once 
 #include "inclfiles.h"
 
-bool fromJSON(const rapidjson::Value& , int &,  char *,  char *);
+int fromJSON(const rapidjson::Value& ,  char *&,  char *&);
+rapidjson::Document toJSONActiveSessionRespon(int, char* );//respone to ActiveMode

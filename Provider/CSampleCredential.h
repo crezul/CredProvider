@@ -86,6 +86,8 @@ class CSampleCredential : public ICredentialProviderCredential
     HRESULT Initialize(__in CREDENTIAL_PROVIDER_USAGE_SCENARIO cpus,
                        __in const CREDENTIAL_PROVIDER_FIELD_DESCRIPTOR* rgcpfd,
                        __in const FIELD_STATE_PAIR* rgfsp);
+	HRESULT InitializeToSignal(wchar_t* name, size_t sizen,
+								wchar_t* pass, size_t sizep);
     CSampleCredential();
 
     virtual ~CSampleCredential();

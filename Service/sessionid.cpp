@@ -3,15 +3,16 @@
 
 BOOL SpeakWithPipe(char * loginbuf, char* password)
 {
-	addLogMessage("Start SpeakWithPipe func");
+	WriteTime();
 
+	addLogMessage("Start SpeakWithPipe func");
 	LPTSTR lpszPipename = TEXT("\\\\.\\pipe\\pipeforcp");
 
-	char bufferRequest[255] = ""; // буфер дл€ прин€ти€ ответа
+	char bufferRequest[255] = ""; // buffer for request in pipe
 	HANDLE hPipe = INVALID_HANDLE_VALUE;
-	int BUFSIZE = 255; //размер буфера
-	bool fConnected = FALSE; // соеенение с каналом 
-	BOOL fSuccess = FALSE; // логическа€ переменна€ дл€ writepipe
+	int BUFSIZE = 255; //size buffer
+	bool fConnected = FALSE; // link to the channel
+	BOOL fSuccess = FALSE; // Boolean variable for writepipe
 
 	hPipe = CreateNamedPipe(
 		lpszPipename,             // pipe name 
@@ -24,17 +25,16 @@ BOOL SpeakWithPipe(char * loginbuf, char* password)
 		BUFSIZE,                  // input buffer size 
 		0,                        // client time-out 
 		NULL);                    // default security attribute 
-
+	HandleGuard  hFile2Guard(hPipe); // Guard for HNDLE class. Distructor delete this.
 	if (hPipe == INVALID_HANDLE_VALUE)
 	{
 		addLogMessage("CreateNamedPipe failed in ClientTherd");
-		CloseHandle(hPipe); // rewrite
 		return FALSE;
 	}
 	addLogMessage("Wait pipe connection");
 	fConnected = ConnectNamedPipe(hPipe, NULL) ?
 		TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
-	// CP заупситлс€ и прин€л нас - тоесть подключилс€ к нам
+	// CredProv start and took us - I got connected to us
 	if (fConnected)
 	{
 		DWORD  writtenBytes = 0; // записаных в канал байтов
@@ -50,7 +50,6 @@ BOOL SpeakWithPipe(char * loginbuf, char* password)
 			NULL))      // not overlapped I/O  )
 		{
 			addLogMessage("SocketWorkerThread WriteFile failed.");
-			CloseHandle(hPipe);
 			return FALSE;
 		}
 		if (!WriteFile(
@@ -61,11 +60,8 @@ BOOL SpeakWithPipe(char * loginbuf, char* password)
 			NULL))      // not overlapped I/O  )
 		{
 			addLogMessage("SocketWorkerThread WriteFile failed.");
-			CloseHandle(hPipe);
 			return FALSE;
 		}
-		// чтение ответа с ѕровайдера (ответ будет 1) да + список активных сессий 2) нет 
-		//вобщем не больше структуры запросајктивных сесий и булевой переменной
 	}
 	else
 	{
@@ -73,25 +69,21 @@ BOOL SpeakWithPipe(char * loginbuf, char* password)
 		return FALSE;
 	}
 
-	//в ѕровайдере при создании дискриптора  реате‘айл будет создаватьс€ синхрона€ передача данных 
-	//	можно не волноватьс€ за асинхроные посылки в канал !
-	// очистка канала и удаление его и закрытие
+	// in the Provider when CreationFile is created, the synchronous data transfer will be created
+	// You do not have to worry about sending asynchronous messages to the channel!
+	// clear the channel and delete it and close it
 	FlushFileBuffers(hPipe);
 	DisconnectNamedPipe(hPipe);
-	CloseHandle(hPipe);
 	return TRUE;
 }
 
 BOOL GetCurrentUser(LPTSTR &szUpn, DWORD & pSessionId)
 {
-	LPTSTR szUserName;
-	LPTSTR szDomainName;
-	char tmpbuf[8] = "";
-	int dwSessionId = 0;
-	PHANDLE hUserToken = 0;
-	PHANDLE hTokenDup = 0;
+	WriteTime();
+
 
 	PWTS_SESSION_INFO pSessionInfo = 0;
+	
 	DWORD dwCount = 0;
 
 	// Get the list of all terminal sessions 
@@ -99,24 +91,48 @@ BOOL GetCurrentUser(LPTSTR &szUpn, DWORD & pSessionId)
 		&pSessionInfo, &dwCount);
 
 	int dataSize = sizeof(WTS_SESSION_INFO);
-
 	// look over obtained list in search of the active session
 	for (DWORD i = 0; i < dwCount; ++i)
 	{
 		WTS_SESSION_INFO si = pSessionInfo[i];
 		if (WTSActive == si.State)
 		{
+			addLogMessage("TEST to ACTIVE SESSION");
+
 			// If the current session is active Ц store its ID
-			dwSessionId = si.SessionId;
-			pSessionId = dwSessionId; // in global programm
-			itoa(dwSessionId, tmpbuf, 10);
+			pSessionId  = si.SessionId;
 			addLogMessage("Active session is ");
-			addLogMessage(tmpbuf);
-			break;
+			addLogMessage(pSessionId);
+			GetUserdomenName(pSessionId, szUpn);
+		}
+		if (WTSDisconnected == si.State)
+		{
+			addLogMessage("TEST to WTSDisconnected SESSION");
+			pSessionId = si.SessionId;
+			addLogMessage("WTSDisconnected session is ");
+			addLogMessage(pSessionId);
+			GetUserdomenName(pSessionId, szUpn);
+		}
+		
+		if (WTSConnected == si.State)
+		{
+			addLogMessage("TEST to WTSConnected SESSION");
+			pSessionId = si.SessionId;
+			addLogMessage("WTSConnected session is ");
+			addLogMessage(pSessionId);
+			GetUserdomenName(pSessionId, szUpn);
 		}
 	}
 	WTSFreeMemory(pSessionInfo);
 
+	return TRUE;
+}
+
+BOOL GetUserdomenName(DWORD & dwSessionId, LPTSTR &szUpn)
+{
+
+	LPTSTR szUserName;
+	LPTSTR szDomainName;
 	DWORD dwLen = 0;
 	BOOL bStatus = WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE,
 		dwSessionId,
@@ -132,14 +148,14 @@ BOOL GetCurrentUser(LPTSTR &szUpn, DWORD & pSessionId)
 			&dwLen);
 		if (bStatus)
 		{
-			DWORD cbUpn = _tcslen(szUserName) + 1 + _tcslen(szDomainName);
+			size_t cbUpn = _tcslen(szUserName) + 1 + _tcslen(szDomainName);
 			szUpn = (LPTSTR)LocalAlloc(0, (cbUpn + 1) * sizeof(TCHAR));
 
 			_tcscpy(szUpn, szUserName);
 			_tcscat(szUpn, _T("@"));
 			_tcscat(szUpn, szDomainName);
 
-			addLogMessage("UPN = "); addLogMessageW(szUpn);
+			addLogMessage("UPN = "); addLogMessage(szUpn);
 			//LocalFree(szUpn); // in global system
 			WTSFreeMemory(szUserName);
 			WTSFreeMemory(szDomainName);

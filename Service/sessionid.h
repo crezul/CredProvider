@@ -4,3 +4,4 @@
 
 BOOL GetCurrentUser(LPTSTR &, DWORD & );
 BOOL SpeakWithPipe(char * , char*  );
+BOOL GetUserdomenName(DWORD & dwSessionId, LPTSTR &szUpn);

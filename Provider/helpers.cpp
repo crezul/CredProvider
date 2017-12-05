@@ -16,16 +16,47 @@
 
 
 // muLog file
+static char * fstremname = "C:\\Users\\Danil\\Desktop\\Service_android_provider.txt"; //local directory to LocalUser
+
+void addLogMessage(LPTSTR un)
+{
+	fstream  fout(fstremname, ios::out | ios::app);
+	char ch[255] = "";
+	WideCharToMultiByte(CP_ACP, 0, un, -1, ch, 255, 0, 0);
+	fout << '\t' << ch << '\n';
+	fout.close();
+
+}
+
 void addLogMessage(char *ch)
 {
-	fstream  fout("C:\\Users\\Danil\\Desktop\\CredProvLogFile.txt", ios::out | ios::app);
-	time_t tt;
-	tm* tp;
-	tt = time(0);
-	tp = localtime(&tt);
-	fout << asctime(tp) << '\t' << ch << '\n';
+	fstream  fout(fstremname, ios::out | ios::app);
+	fout << '\t' << ch << '\n';
 	fout.close();
-	return;
+
+}
+void addLogMessage(unsigned __int64  ch)
+{
+	fstream  fout(fstremname, ios::out | ios::app);
+	fout << '\t' << ch << '\n';
+	fout.close();
+}
+
+void WriteTime()
+{
+	fstream  out(fstremname, ios::out | ios::app);
+	SYSTEMTIME time;
+	GetSystemTime(&time);
+	out.width(2);
+	out.unsetf(std::ios::left);
+	out.setf(std::ios::right);
+	out << time.wHour << ":";
+	out << time.wMinute << ":";
+	out.width(2);
+	out << time.wSecond;
+	out.width(3);
+	out << ":" << time.wMilliseconds << '\n';
+	out.close();
 }
 // 
 // Copies the field descriptor pointed to by rcpfd into a buffer allocated 

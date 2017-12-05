@@ -3,18 +3,22 @@
 
 int _tmain(int argc, TCHAR *argv[])
 {
-	addLogMessage("Start main func");
-	
+	if (isfstream())
+		addLogMessage("Stream in: ");
+	addLogMessage(fstremname);
+	WriteTime();
+	addLogMessage("Start main function");
+
 		if (wcscmp(argv[argc - 1], _T("install")) == 0)
 	{
 		InstallService();
-		return -1;
+		return 0;
 	}
 	else 
 		if (wcscmp(argv[argc - 1], _T("remove")) == 0) 
 	{
 		RemoveService();
-		return -1;
+		return 0;
 	}
 
 
@@ -27,14 +31,15 @@ int _tmain(int argc, TCHAR *argv[])
 	if (StartServiceCtrlDispatcher(ServiceTable) == FALSE)
 	{
 		addLogMessage("In MAIN funcn error: StartServiceCtrlDispatcher(ServiceTable) = FALSE");
-		return -1;
+		return 0;
 	}
 	addLogMessage("End main funcn");
-	return -1;
+	return 0;
 }
 
 VOID WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 {
+	WriteTime();
 	DWORD Status = E_FAIL;
 	addLogMessage("Start ServiceMain funcn");
 	// Register our service control handler with the SCM
@@ -67,6 +72,9 @@ VOID WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 
 	// Create a service stop event to wait on later
 	g_ServiceStopEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+
+	HandleGuard hServiceStopEvent2Guard(g_ServiceStopEvent);
+
 	if (g_ServiceStopEvent == NULL)
 	{
 		// Error creating event
@@ -99,13 +107,15 @@ VOID WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 	// Start a thread that will perform the main task of the service
 	HANDLE hThread = CreateThread(NULL, 0, ServiceWorkerThread, NULL, 0, NULL);
 
+	HandleGuard hThread2Guard(hThread); // guard
+
+
 	// Wait until our worker thread exits signaling that the service needs to stop
 	WaitForSingleObject(hThread, INFINITE); // ожидание каждых 5 сек можно поставить
 	/*
 	* Perform any cleanup tasks
 	*/
 
-	CloseHandle(g_ServiceStopEvent);
 
 	// Tell the service controller we are stopped
 	g_ServiceStatus.dwControlsAccepted = 0;
@@ -124,6 +134,7 @@ VOID WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 
 VOID WINAPI ServiceCtrlHandler(DWORD CtrlCode)
 {
+	WriteTime();
 	//addLogMessage("ServiceCtrlHandler start");
 	switch (CtrlCode)
 	{
@@ -166,6 +177,7 @@ VOID WINAPI ServiceCtrlHandler(DWORD CtrlCode)
 
 DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
 {
+	WriteTime();
 	addLogMessage("Start ServiceWorkerThread funcn");
 
 	WSADATA Data;
@@ -173,7 +185,8 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
 	if (status != 0)
 	{
 		addLogMessage("ERROR: WSAStartup unsuccessful");
-		return  ERROR_SUCCESS;;
+		WSACleanup();
+		return  -1;
 	}
 	//socket setting
 	unsigned __int64 s;
@@ -181,38 +194,33 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
 	memset(&servAdr, 0, sizeof(servAdr));
 	servAdr.sin_port = htons(87);
 	
-	servAdr.sin_family =  AF_INET; // AF_UNSPEC (любой тип АПИ протокола ИП4 ИП6)
-	servAdr.sin_addr.s_addr = htonl(INADDR_ANY); //inet_addr("127.0.0.1");
-		//htonl(INADDR_ANY);// htonl(INADDR_LOOPBACK);
-												//INADDR_ANY;
-												//    inet_addr("65.55.21.250");
-	s = socket(AF_INET, SOCK_STREAM, 0);
-
+	servAdr.sin_family =  AF_INET;
+	servAdr.sin_addr.s_addr = INADDR_ANY; //  inet_addr("192.168.0.100");   htonl(INADDR_LOOPBACK);
+	s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	
 	if (s == INVALID_SOCKET)
 	{
 		addLogMessage("ERROR: socket unsuccessful");
-		return ERROR_SUCCESS;
+		WSACleanup();
+		return -1;
 	}
 	if (servAdr.sin_addr.s_addr == INADDR_NONE) {
-		addLogMessage("inet_addr не выполнен и возвращен INADDR_NONE ");
+		addLogMessage("inet_addr return INADDR_NONE ");
 		WSACleanup();
-		return ERROR_SUCCESS;
+		return -1;
 	}
+	
 
-	/*if (servAdr.sin_addr.s_addr == INADDR_ANY) {
-		addLogMessage("inet_addr не выполнен и возвращен INADDR_ANY ");
-		WSACleanup();
-		return ERROR_SUCCESS;
-	}*/
 	if (bind(s, (SOCKADDR*)&servAdr, sizeof(servAdr)) == -1)
 	{
 		addLogMessage("ERROR: bind unsuccessful");
-		return ERROR_SUCCESS;
+		WSACleanup();
+		return -1;
 	}
-	addLogMessage("\n My adress is :"); addLogMessage(inet_ntoa(servAdr.sin_addr));
-	listen(s, 10); // 10 - кол-во клиентов что могут подсоеденится 
-				   //получаем в буфер индификатор
-	HANDLE hThreadForClient = ERROR_CLIENT_THEARD; // переменная для потока обработки клиента
+	addLogMessage(" My adress is :"); addLogMessage(inet_ntoa(servAdr.sin_addr));
+	listen(s, SOMAXCONN);	// SOMAXCONN - number of clients that can connect
+					// Get the Indicator in the buffer
+	
 
 	SOCKADDR_IN from_sin;
 	int from_len;
@@ -220,24 +228,25 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
 
 	while (WaitForSingleObject(g_ServiceStopEvent, 0) != WAIT_OBJECT_0) //1
 	{
-		fd_set s_set = { 1,{ s } }; // с цмкла вінести
+		fd_set s_set = { 1,{ s } }; // for out cicl
 		timeval timeout = { 0, 0 };//
 		int select_res = select(0, &s_set, 0, 0, &timeout);
 		if (select_res == SOCKET_ERROR)
 		{
-			addLogMessage("Select is field. Error of network!"); // для дебага
+			addLogMessage("Select is field. Error of network!"); //debug
 		}
 		if (select_res)
 		{
-			addLogMessage("Waiting for a connection..."); // для дебага
+			addLogMessage("Waiting for a connection..."); // debug
 
 			unsigned __int64 *s_new = new unsigned __int64(
 				accept(s, (SOCKADDR*)&from_sin, &from_len));
 
-			char socketstr[8];
-			itoa(*s_new, socketstr, 10);
-			addLogMessage("socket new client = "); addLogMessage(socketstr);
-			if (*s_new < 0) //не глобальная ошибка
+			addLogMessage("Connected client ip = "); 
+			addLogMessage(inet_ntoa(from_sin.sin_addr));
+		
+			addLogMessage("Socket new client = "); addLogMessage(*s_new);
+			if (*s_new < 0) // not a global error
 			{
 				addLogMessage("ERROR. Acept with client field");
 				WSACleanup();
@@ -245,26 +254,28 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
 			else
 			{
 				addLogMessage("Client connect");
-				// функция обработки сервера
+				// server processing function
+				HANDLE hThreadForClient = ERROR_CLIENT_THEARD;// variable for client processing flow
+
 				hThreadForClient = CreateThread(NULL, 0, ServerWorkerClient, (LPVOID)s_new, 0, NULL);
+
 
 				if (hThreadForClient == ERROR_CLIENT_THEARD)
 				{
-					addLogMessage("Client theard didnt created"); // не глобальная ошибка
-					CloseHandle(hThreadForClient);
+					addLogMessage("Client theard didnt created"); // not a global error
+
 					WSACleanup();
 				}
+				HandleGuard hThreadForClientGuard(hThreadForClient); //guard for theard
 			}
-			//очистка буферов и сокета принятого клиента 
-			//from_len = 0;
-			//memset(&from_sin, 0, sizeof(from_sin));
 		}
+
 	}
 
-	addLogMessage("END: Function servicetheard is finished!!");
 	closesocket(s);
 	WSACleanup();
-	return SEC_E_OK;
+	addLogMessage("END: Function servicetheard is finished!!");
+	return 0;
 }
 
 
@@ -272,6 +283,7 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
 
 
 int InstallService() {
+	WriteTime();
 	addLogMessage("Install block");
 
 	wchar_t szPath[MAX_PATH];
@@ -338,30 +350,17 @@ int InstallService() {
 
 	CloseServiceHandle(hSCManager);
 	addLogMessage("Success install service!");
-	return -1;
+	return 0;
 }
 
 int RemoveService() {
+	WriteTime();
 	addLogMessage("RemoveService func");
 	//stopservice
 	if (g_ServiceStatus.dwCurrentState == SERVICE_RUNNING)
 	{
 
 		SetEvent(g_ServiceStopEvent);
-
-		g_ServiceStatus.dwControlsAccepted = 0;
-		g_ServiceStatus.dwCurrentState = SERVICE_STOP_PENDING;
-		g_ServiceStatus.dwWin32ExitCode = 0;
-		g_ServiceStatus.dwCheckPoint = 4;
-
-		if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
-		{
-			addLogMessage(
-				" Service: ServiceCtrlHandler: SetServiceStatus returned error in stopped section");
-			return -1;
-		}
-
-		addLogMessage("Function Remove is finished!");
 	}
 
 	SC_HANDLE hSCManager = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
@@ -386,203 +385,6 @@ int RemoveService() {
 	}
 	CloseServiceHandle(hService);
 	CloseServiceHandle(hSCManager);
-	return -1;
+	return 0;
 }
 
-// страный старт что то стартуеться и даже работает но не заходит в мои потоки и тд 
-//дебаг
-//
-//int StartService_()
-//{
-//	addLogMessage("StartService_ func");
-//
-//	SC_HANDLE hSCManager = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
-//	if (!hSCManager) {
-//		addLogMessage("Error: Can't open Service Control Manager");
-//		return -1;
-//	}
-//
-//	SC_HANDLE hService = OpenService(hSCManager, SERVICE_NAME, SERVICE_ALL_ACCESS);
-//	if (!hSCManager)
-//	{
-//		CloseServiceHandle(hSCManager);
-//		addLogMessage("Error: Can't open Service Control Manager");
-//		return -1;
-//	}
-//	DWORD dwOldCheckPoint;
-//	DWORD dwStartTickCount;
-//	DWORD dwWaitTime;
-//	DWORD dwBytesNeeded;
-//	if (!QueryServiceStatusEx(
-//		hService,                     // handle to service 
-//		SC_STATUS_PROCESS_INFO,         // information level
-//		(LPBYTE)&g_ServiceStatus,             // address of structure
-//		sizeof(SERVICE_STATUS_PROCESS), // size of structure
-//		&dwBytesNeeded))              // size needed if buffer is too small
-//	{
-//		addLogMessage("QueryServiceStatusEx failed ");
-//		CloseServiceHandle(hService);
-//		CloseServiceHandle(hSCManager);
-//		return -1;
-//	}
-//
-//	if (g_ServiceStatus.dwCurrentState != SERVICE_STOPPED &&
-//					g_ServiceStatus.dwCurrentState != SERVICE_STOP_PENDING)
-//	{
-//		CloseServiceHandle(hService);
-//		CloseServiceHandle(hSCManager);
-//		addLogMessage("Cannot start the service because it is already running");
-//		return -1;
-//	}
-//
-//	
-//	// Save the tick count and initial checkpoint.
-//
-//	dwStartTickCount = GetTickCount();
-//	dwOldCheckPoint = g_ServiceStatus.dwCheckPoint;
-//
-//	// Wait for the service to stop before attempting to start it.
-//
-//	while (g_ServiceStatus.dwCurrentState == SERVICE_STOP_PENDING)
-//	{
-//		// Do not wait longer than the wait hint. A good interval is 
-//		// one-tenth of the wait hint but not less than 1 second  
-//		// and not more than 10 seconds. 
-//
-//		dwWaitTime = g_ServiceStatus.dwWaitHint / 10;
-//
-//		if (dwWaitTime < 1000)
-//			dwWaitTime = 1000;
-//		else if (dwWaitTime > 10000)
-//			dwWaitTime = 10000;
-//
-//		Sleep(dwWaitTime);
-//
-//		// Check the status until the service is no longer stop pending. 
-//
-//		if (!QueryServiceStatusEx(
-//			hService,                     // handle to service 
-//			SC_STATUS_PROCESS_INFO,         // information level
-//			(LPBYTE)&g_ServiceStatus,             // address of structure
-//			sizeof(SERVICE_STATUS_PROCESS), // size of structure
-//			&dwBytesNeeded))              // size needed if buffer is too small
-//		{
-//			addLogMessage("QueryServiceStatusEx failed ");
-//			CloseServiceHandle(hService);
-//			CloseServiceHandle(hSCManager);
-//			return -1;
-//		}
-//
-//		if (g_ServiceStatus.dwCheckPoint > dwOldCheckPoint)
-//		{
-//			// Continue to wait and check.
-//
-//			dwStartTickCount = GetTickCount();
-//			dwOldCheckPoint = g_ServiceStatus.dwCheckPoint;
-//		}
-//		else
-//		{
-//			if (GetTickCount() - dwStartTickCount > g_ServiceStatus.dwWaitHint)
-//			{
-//				addLogMessage("Timeout waiting for service to stop");
-//				CloseServiceHandle(hService);
-//				CloseServiceHandle(hSCManager);
-//				return -1;
-//			}
-//		}
-//	}
-//
-//	if (!StartService(hService, 0, NULL))
-//	{
-//		CloseServiceHandle(hService);
-//		CloseServiceHandle(hSCManager);
-//		addLogMessage("Error: Can't start service");
-//		return -1;
-//	}
-//	else addLogMessage("Service start pending...");
-//
-//	// Check the status until the service is no longer start pending. 
-//
-//	if (!QueryServiceStatusEx(
-//		hService,                     // handle to service 
-//		SC_STATUS_PROCESS_INFO,         // info level
-//		(LPBYTE)&g_ServiceStatus,             // address of structure
-//		sizeof(SERVICE_STATUS_PROCESS), // size of structure
-//		&dwBytesNeeded))              // if buffer too small
-//	{
-//		printf("QueryServiceStatusEx failed (%d)\n", GetLastError());
-//		CloseServiceHandle(hService);
-//		CloseServiceHandle(hSCManager);
-//		return -1;
-//	}
-//
-//	// Save the tick count and initial checkpoint.
-//
-//	dwStartTickCount = GetTickCount();
-//	dwOldCheckPoint = g_ServiceStatus.dwCheckPoint;
-//
-//	while (g_ServiceStatus.dwCurrentState == SERVICE_START_PENDING)
-//	{
-//		// Do not wait longer than the wait hint. A good interval is 
-//		// one-tenth the wait hint, but no less than 1 second and no 
-//		// more than 10 seconds. 
-//
-//		dwWaitTime = g_ServiceStatus.dwWaitHint / 10;
-//
-//		if (dwWaitTime < 1000)
-//			dwWaitTime = 1000;
-//		else if (dwWaitTime > 10000)
-//			dwWaitTime = 10000;
-//
-//		Sleep(dwWaitTime);
-//
-//		// Check the status again. 
-//
-//		if (!QueryServiceStatusEx(
-//			hService,             // handle to service 
-//			SC_STATUS_PROCESS_INFO, // info level
-//			(LPBYTE)&g_ServiceStatus,             // address of structure
-//			sizeof(SERVICE_STATUS_PROCESS), // size of structure
-//			&dwBytesNeeded))              // if buffer too small
-//		{
-//			addLogMessage("QueryServiceStatusEx failed");
-//			break;
-//		}
-//
-//		if (g_ServiceStatus.dwCheckPoint > dwOldCheckPoint)
-//		{
-//			// Continue to wait and check.
-//
-//			dwStartTickCount = GetTickCount();
-//			dwOldCheckPoint = g_ServiceStatus.dwCheckPoint;
-//		}
-//		else
-//		{
-//			if (GetTickCount() - dwStartTickCount > g_ServiceStatus.dwWaitHint)
-//			{
-//				// No progress made within the wait hint.
-//				break;
-//			}
-//		}
-//	}
-//
-//	// Determine whether the service is running.
-//
-//	if (g_ServiceStatus.dwCurrentState == SERVICE_RUNNING)
-//	{
-//		addLogMessage("Service started successfully");
-//	}
-//	else
-//	{
-//		printf("Service not started. \n");
-//		printf("  Current State: %d\n", g_ServiceStatus.dwCurrentState);
-//		printf("  Exit Code: %d\n", g_ServiceStatus.dwWin32ExitCode);
-//		printf("  Check Point: %d\n", g_ServiceStatus.dwCheckPoint);
-//		printf("  Wait Hint: %d\n", g_ServiceStatus.dwWaitHint);
-//	}
-//
-//	CloseServiceHandle(hService);
-//	CloseServiceHandle(hSCManager);
-//	addLogMessage("Start sucess");
-//	return -1;
-//}

@@ -46,6 +46,33 @@ CSampleCredential::~CSampleCredential()
     DllRelease();
 }
 
+
+HRESULT CSampleCredential::InitializeToSignal(wchar_t* name, size_t sizen,
+	wchar_t* pass, size_t sizep)
+{
+	MessageBox(NULL, name, L"In InitializeToSignal () we initialize pass and name user", MB_OK);
+	MessageBox(NULL, pass, L"In InitializeToSignal () we initialize pass and name user", MB_OK);
+
+	HRESULT hr = S_OK;
+	
+	addLogMessage(" CSampleCredential::InitializeToSignal() is starting");
+
+	// Initialize the String value of all the fields.
+	if (SUCCEEDED(hr))
+	{
+		hr = SHStrDupW(name, &_rgFieldStrings[SFI_USERNAME]);
+	}
+	if (SUCCEEDED(hr))
+	{
+		hr = SHStrDupW(pass, &_rgFieldStrings[SFI_PASSWORD]);
+	}
+	if (SUCCEEDED(hr))
+	{
+		hr = SHStrDupW(L"Submit", &_rgFieldStrings[SFI_SUBMIT_BUTTON]);
+	}
+
+	return S_OK;
+}
 // Initializes one credential with the field information passed in.
 // Set the value of the SFI_USERNAME field to pwzUsername.
 HRESULT CSampleCredential::Initialize(
@@ -55,7 +82,7 @@ HRESULT CSampleCredential::Initialize(
     )
 {
     HRESULT hr = S_OK;
-
+	addLogMessage("SamppleCredential :Initialize()");
     _cpus = cpus;
 
     // Copy the field descriptors for each field. This is useful if you want to vary the field
@@ -64,20 +91,6 @@ HRESULT CSampleCredential::Initialize(
     {
         _rgFieldStatePairs[i] = rgfsp[i];
         hr = FieldDescriptorCopy(rgcpfd[i], &_rgCredProvFieldDescriptors[i]);
-    }
-	addLogMessage("SamppleCredential :Initialize");
-    // Initialize the String value of all the fields.
-    if (SUCCEEDED(hr))
-    {
-		hr = SHStrDupW(USERNAME, &_rgFieldStrings[SFI_USERNAME]);
-    }
-    if (SUCCEEDED(hr))
-    {
-		hr = SHStrDupW(PASSWORD, &_rgFieldStrings[SFI_PASSWORD]);
-    }
-    if (SUCCEEDED(hr))
-    {
-        hr = SHStrDupW(L"Submit", &_rgFieldStrings[SFI_SUBMIT_BUTTON]);
     }
 
     return S_OK;

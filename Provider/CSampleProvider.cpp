@@ -96,6 +96,7 @@ HRESULT CSampleProvider::SetUsageScenario(
                 if (_pMessageCredential)
                 {
                     _pCommandWindow = new CCommandWindow();
+
                     if (_pCommandWindow != NULL)
                     {
                         // Initialize each of the object we've just created. 
@@ -103,10 +104,14 @@ HRESULT CSampleProvider::SetUsageScenario(
                         // when to re-enumerate credentials.
                         // - The CSampleCredential needs field descriptors.
                         // - The CMessageCredential needs field descriptors and a message.
-                        hr = _pCommandWindow->Initialize(this);
-                        if (SUCCEEDED(hr))
+
+						hr = _pCredential->Initialize(_cpus, s_rgCredProvFieldDescriptors, s_rgFieldStatePairs);
+                       
+						if (SUCCEEDED(hr))
                         {
-                            hr = _pCredential->Initialize(_cpus, s_rgCredProvFieldDescriptors, s_rgFieldStatePairs);
+							hr = _pCommandWindow->Initialize(this,_pCredential);
+
+                           
                             if (SUCCEEDED(hr))
                             {
                                 hr = _pMessageCredential->Initialize(s_rgMessageCredProvFieldDescriptors, s_rgMessageFieldStatePairs, L"Login with Android");

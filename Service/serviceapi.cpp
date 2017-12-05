@@ -4,95 +4,101 @@
 
 DWORD WINAPI ServerWorkerClient(LPVOID lpParam)
 {
-	addLogMessage("Start ServerWorkerClient funcn");
+	WriteTime();
+
+	addLogMessage("Start ServerWorkerClient func");
 	unsigned __int64 * socket_client = (unsigned __int64*)lpParam;
+
+	SocketGuard socet_clientGuard(socket_client); // guard to socket
+									// hen you exit from the scope, it will break the connection
+									//to the socket and delete it
+
 	//for debug client socket
-	char socketstr[8];
-	itoa(*socket_client, socketstr, 10);
-	addLogMessage("socket  client in ServerWorkerClient = "); addLogMessage(socketstr);
+
 	//
-	char message[255] = ""; // можно денамически выдел€ть пам€ть исход€ из размера байт–идера
+	char message[255] = "";
 	int bytes_read = 0;
 
-	bytes_read = recv(*socket_client, message, sizeof(message), 0); // message будет json
+	bytes_read = recv(*socket_client, message, sizeof(message), 0); // message json
 
-	if (bytes_read == 0) // потом 1 пакет будет идти как сообщение дл€ размера передаваемых данных  
+	if (bytes_read == 0) 
 	{
 		addLogMessage("ERROR. Bytes reader is field or error of network");
 		return -1;
 	}
 	addLogMessage("Massage from client is accepted:");
 
-	itoa(bytes_read, socketstr, 10);
-	
-	addLogMessage(message); // дл€ дебага!
-	addLogMessage("Long message = "); addLogMessage(socketstr);
+	addLogMessage(message); 	addLogMessage("Long message = "); addLogMessage(bytes_read);
+
 	bytes_read = 0;
 	// With JSON
 	
-	//
-	int command;
-
 	rapidjson::Document doc;
 	doc.Parse(message);
-	if (!doc.IsObject())
+	char *login;
+	char *pass;
+
+	switch (fromJSON(doc, login, pass))
 	{
-		addLogMessage("JSON doc is not an object");
-		return -1;
-	}
-	if (!doc.HasMember("command"))
+	case 1:
 	{
-		addLogMessage("JSON doc hasn't member command");
-		return -1;
-	}
-	command = doc["command"].GetInt();
-	
-		if (command == 1)
+		LPTSTR userDomenName;
+		DWORD sessionid;
+		if (!GetCurrentUser(userDomenName, sessionid))
 		{
-			addLogMessage("Active session list mode");
-			LPTSTR userDomenName;
-			DWORD sessionid;
-			if (!GetCurrentUser(userDomenName, sessionid))
-			{
-				addLogMessage("ERROR:GetCurrentUser return field");
-				return -1;
-			}
-			// ответ серверу с доменом и именем
+			addLogMessage("ERROR:GetCurrentUser return field");
+			return -1;
 		}
-	else 
-		if (command == 0)
+		else
 		{
-			addLogMessage("Autorization mode");
-			static const char* members[] = {"login", "password" };
-			for (size_t i = 0; i < sizeof(members) / sizeof(members[0]); i++)
-				if (!doc.HasMember(members[i]))
-				{
-					addLogMessage("JSON doc hasn't member login or pass");
-					return -1;
-				}
-			char *login = (char*)doc["login"].GetString();
-			char *pass = (char*)doc["password"].GetString();
+			addLogMessage("GetCurrentUser function return true");
+		}
+		//
+		char domenname[255] = "";
+		WideCharToMultiByte(CP_ACP, 0, userDomenName, -1, domenname, 255, 0, 0);
+		//respone to server
 
-			addLogMessage("JSON packet is accept");
-			addLogMessage(login); addLogMessage(pass);
+		//to respone JSON local varieble
+		rapidjson::Document docrespon;
+		rapidjson::StringBuffer buffer;
+		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
 
-				if (!SpeakWithPipe(login, pass))
-				{
-					addLogMessage("Speak with Pipe return error");
-					return -1;
-				}
-			}
-			else
-			{
-				addLogMessage("ERROR: code of command !=login or sessionlist");
-				return -1;
-			}
-		
-	shutdown(*socket_client, 2); //гасим сокет который мы открыли
-	bytes_read = 0;    // очищаем буфер
-	if (socket_client)
-		delete socket_client;	// удал€ем глобально выделенный в куче сокет - очищаем пам€ть (сылку на который мы получили в функции)
-	socket_client = NULL;	// на вс€кий случий присваеваем адресу нолевой указатель
+		docrespon = toJSONActiveSessionRespon(sessionid, domenname);
+
+		docrespon.Accept(writer);
+		//
+		int sendbytes = 0;
+		sendbytes = send(*socket_client, buffer.GetString(), (int)buffer.GetLength(), 0);
+
+		if (sendbytes <= 0)
+		{
+			addLogMessage("Send respone to client is field. Networking or endpoint exception");
+			return -1;
+		}
+		addLogMessage((char*)buffer.GetString());
+	
+		addLogMessage("Long message to respone = "); addLogMessage(sendbytes); //for debug
+
+		break;
+	}
+	case 0:
+
+		if (!SpeakWithPipe(login, pass))
+		{
+			addLogMessage("Speak with Pipe return error");
+			return -1;
+		}
+		// respone to client of result autorization
+
+		break;
+	case -1:
+		addLogMessage("fronJSON-func return error.");
+		return -1;
+		break;
+	default:
+		addLogMessage("JSON-func return false valuе ");
+	}
+	
 	addLogMessage("END ServerWorkerClient func");
-	return SEC_E_OK;
+	return 0;
 }
