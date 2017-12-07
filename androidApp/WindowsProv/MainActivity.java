@@ -119,7 +119,7 @@ public class MainActivity extends AppCompatActivity {
         setSerIpAddress(etIPaddress.getText().toString());
         if (getSerIpAddress().isEmpty())
         {
-            Toast msgToast = Toast.makeText(this, "Input IP point", Toast.LENGTH_SHORT);
+            Toast msgToast = Toast.makeText(this, "Input IP point, please", Toast.LENGTH_SHORT);
             msgToast.show();
             return;
         }
@@ -139,18 +139,19 @@ public class MainActivity extends AppCompatActivity {
 
         }
         EditText etLogin = (EditText) findViewById(R.id.etLogin);
-        setLogin(etLogin.getText().toString());
+        setLogin(etLogin.getText().toString().trim()); // delete _ in login
 
         EditText etPass = (EditText) findViewById(R.id.etPass);
         setPassword(etPass.getText().toString());
 
 // controller
+        SenderThread sender;
         switch (v.getId()) {
             case R.id.btnSMsg:
                 if (!getLogin().isEmpty() && !getPassword().isEmpty()) {
                     setCodeCommand(codeAuto);
                     Log.d("Programm Logger :", "you turn button autorization");
-                    SenderThread sender = new SenderThread(); // class to send and recieve message
+                    sender = new SenderThread(); // class to send and recieve message
                     sender.start();
                 } else {
                     Toast msgToast = Toast.makeText(this, "Please, input all margins", Toast.LENGTH_SHORT);
@@ -161,7 +162,7 @@ public class MainActivity extends AppCompatActivity {
                 listcclear();
                 setCodeCommand(codeSessionList);
                 Log.d("Programm Logger :", "you turn button sessionlist");
-                SenderThread sender = new SenderThread(); // class to send and recieve message
+                 sender = new SenderThread(); // class to send and recieve message
                 sender.start();
                 break;
         }
@@ -203,6 +204,9 @@ public class MainActivity extends AppCompatActivity {
                 }
                 catch (IOException e) {
                     Log.d("Error", "Error to create socket" + e.toString());
+                    Toast toast = Toast.makeText(getApplicationContext(),
+                            "Connection error with PC", Toast.LENGTH_SHORT);
+                    toast.show();
                     return ;
                 }
 
@@ -221,15 +225,15 @@ public class MainActivity extends AppCompatActivity {
                             jo.put("command", getCodeAuto());
                             jo.put("login", getLogin());
                             jo.put("password", getPassword());
-                            // out.write(jo.toString());
                             out.write(jo.toString().getBytes());
-                            Log.d("Programm Logger :", "send massege is up to adress");
-                            //  Log.d("Programm Logger :", ipAddress.toString());
+                            Log.d("Programm Logger :", "send massege...");
                             Log.d("Programm Logger :", jo.toString());
                         } catch (JSONException ex) {
                             out.close();
                             in.close();
                             Log.d("Error", "Error to create JSON" + ex.toString());
+                            Toast toast = Toast.makeText(getApplicationContext(),
+                                    "Error to send message on PC", Toast.LENGTH_SHORT);
                         }
                         break;
                     case codeSessionList:
@@ -238,10 +242,14 @@ public class MainActivity extends AppCompatActivity {
                             jo.put("command", getCodeSessionList());
                             out.write(jo.toString().getBytes());
                             Log.d("Programm Logger :", "Send to server: " + jo.toString());
+
                             //respone
+
                             String respone = in.readLine();
+
                             Log.d("Programm Logger :", "Respone for server = " + respone);
                             JSONObject jorespone = new JSONObject(respone);
+
                             setDomentolist(jorespone.getString("domenname"));
                             setSesiontolist(jorespone.getString("session"));
 
@@ -257,8 +265,8 @@ public class MainActivity extends AppCompatActivity {
                             //view
                         } catch (JSONException ex) {
                             Log.d("Error", "Error to create JSON packet" + ex.toString());
-
-
+                            Toast toast = Toast.makeText(getApplicationContext(),
+                                    "Error to send message on PC", Toast.LENGTH_SHORT);
                             out.close();
                             in.close();
                         }
@@ -280,6 +288,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 }
+//volidate IP
 class IPAddressValidator {
 
     private static final String IP_ADDRESS_PATTERN

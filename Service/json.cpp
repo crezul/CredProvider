@@ -49,7 +49,7 @@ int fromJSON(const rapidjson::Value& doc,  char *&szLogin,  char *&szPass) {
 	return -1;
 }
 
-rapidjson::Document toJSONActiveSessionRespon(int sessionid, char* domenname)  //respone to ActiveMode
+rapidjson::Document toJSONActiveSessionRespon(map<int, string>& session)  //respone to ActiveMode
 {
 	WriteTime();
 
@@ -58,12 +58,15 @@ rapidjson::Document toJSONActiveSessionRespon(int sessionid, char* domenname)  /
 	auto& allocator = doc.GetAllocator();
 
 	doc.SetObject();
-	json_val.SetInt(sessionid);
-	doc.AddMember("session", json_val, allocator);
-	json_val.SetString(domenname, allocator);
-	doc.AddMember("domenname", json_val, allocator);
-//	addLogMessage("test"); addLogMessage((char*)doc["domenname"].GetString());
-
+	addLogMessage("In TOJSON func");
+	for (auto it =session.begin(); it != session.end(); ++it)
+	{
+		addLogMessage(it->first); addLogMessage((char*)it->second.c_str());
+		json_val.SetInt(it->first);
+		doc.AddMember("session", json_val, allocator);
+		json_val.SetString(it->second.c_str(), allocator);
+		doc.AddMember("domenname", json_val, allocator);
+	}
 	addLogMessage("toJSONActiveSessionRespone:: String to respone client:"); 
 	return doc;
 }

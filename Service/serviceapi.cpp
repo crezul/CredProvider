@@ -42,9 +42,9 @@ DWORD WINAPI ServerWorkerClient(LPVOID lpParam)
 	{
 	case 1:
 	{
-		LPTSTR userDomenName;
-		DWORD sessionid;
-		if (!GetCurrentUser(userDomenName, sessionid))
+		map <int, string> allsession;
+		addLogMessage(allsession.size());
+		if (!GetCurrentUser(allsession))
 		{
 			addLogMessage("ERROR:GetCurrentUser return field");
 			return -1;
@@ -52,10 +52,13 @@ DWORD WINAPI ServerWorkerClient(LPVOID lpParam)
 		else
 		{
 			addLogMessage("GetCurrentUser function return true");
+			addLogMessage("MAP is :"); addLogMessage(allsession.size());
+			for (auto it = allsession.begin(); it != allsession.end(); ++it)
+			{
+				addLogMessage(it->first); addLogMessage((char*)it->second.c_str());
+			}
 		}
-		//
-		char domenname[255] = "";
-		WideCharToMultiByte(CP_ACP, 0, userDomenName, -1, domenname, 255, 0, 0);
+	
 		//respone to server
 
 		//to respone JSON local varieble
@@ -63,7 +66,7 @@ DWORD WINAPI ServerWorkerClient(LPVOID lpParam)
 		rapidjson::StringBuffer buffer;
 		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
 
-		docrespon = toJSONActiveSessionRespon(sessionid, domenname);
+		docrespon = toJSONActiveSessionRespon(allsession);
 
 		docrespon.Accept(writer);
 		//

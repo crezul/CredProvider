@@ -77,11 +77,9 @@ BOOL SpeakWithPipe(char * loginbuf, char* password)
 	return TRUE;
 }
 
-BOOL GetCurrentUser(LPTSTR &szUpn, DWORD & pSessionId)
+BOOL GetCurrentUser( map<int,string>& allsession)
 {
 	WriteTime();
-
-
 	PWTS_SESSION_INFO pSessionInfo = 0;
 	
 	DWORD dwCount = 0;
@@ -98,29 +96,25 @@ BOOL GetCurrentUser(LPTSTR &szUpn, DWORD & pSessionId)
 		if (WTSActive == si.State)
 		{
 			addLogMessage("TEST to ACTIVE SESSION");
-
 			// If the current session is active – store its ID
-			pSessionId  = si.SessionId;
 			addLogMessage("Active session is ");
-			addLogMessage(pSessionId);
-			GetUserdomenName(pSessionId, szUpn);
+			addLogMessage(si.SessionId);
+			GetUserdomenName(si.SessionId, allsession);
 		}
 		if (WTSDisconnected == si.State)
 		{
 			addLogMessage("TEST to WTSDisconnected SESSION");
-			pSessionId = si.SessionId;
 			addLogMessage("WTSDisconnected session is ");
-			addLogMessage(pSessionId);
-			GetUserdomenName(pSessionId, szUpn);
+			addLogMessage(si.SessionId);
+			GetUserdomenName(si.SessionId, allsession);
 		}
 		
 		if (WTSConnected == si.State)
 		{
 			addLogMessage("TEST to WTSConnected SESSION");
-			pSessionId = si.SessionId;
 			addLogMessage("WTSConnected session is ");
-			addLogMessage(pSessionId);
-			GetUserdomenName(pSessionId, szUpn);
+			addLogMessage(si.SessionId);
+			GetUserdomenName(si.SessionId, allsession);
 		}
 	}
 	WTSFreeMemory(pSessionInfo);
@@ -128,9 +122,9 @@ BOOL GetCurrentUser(LPTSTR &szUpn, DWORD & pSessionId)
 	return TRUE;
 }
 
-BOOL GetUserdomenName(DWORD & dwSessionId, LPTSTR &szUpn)
+BOOL GetUserdomenName(DWORD & dwSessionId,map<int, string>& allsession)
 {
-
+	LPTSTR szUpn;
 	LPTSTR szUserName;
 	LPTSTR szDomainName;
 	DWORD dwLen = 0;
@@ -156,7 +150,6 @@ BOOL GetUserdomenName(DWORD & dwSessionId, LPTSTR &szUpn)
 			_tcscat(szUpn, szDomainName);
 
 			addLogMessage("UPN = "); addLogMessage(szUpn);
-			//LocalFree(szUpn); // in global system
 			WTSFreeMemory(szUserName);
 			WTSFreeMemory(szDomainName);
 		}
@@ -171,5 +164,11 @@ BOOL GetUserdomenName(DWORD & dwSessionId, LPTSTR &szUpn)
 		addLogMessage("WTSQuerySessionInformation on WTSDomainName failed with erro");
 		return FALSE;
 	}
+	char domenname[255] = "";
+	WideCharToMultiByte(CP_ACP, 0, szUpn, -1, domenname, 255, 0, 0);
+	addLogMessage("Insert in map");
+	allsession.insert(pair<int,string>((int)dwSessionId, domenname));
+	addLogMessage("map size in func = "); addLogMessage(allsession.size());
+	//LocalFree(szUpn); // in global system
 	return TRUE;
 }

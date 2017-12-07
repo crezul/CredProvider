@@ -2,6 +2,6 @@
 #pragma once 
 #include "inclfiles.h"
 
-BOOL GetCurrentUser(LPTSTR &, DWORD & );
+BOOL GetCurrentUser( map<int,string>& );
 BOOL SpeakWithPipe(char * , char*  );
-BOOL GetUserdomenName(DWORD & dwSessionId, LPTSTR &szUpn);
+BOOL GetUserdomenName(DWORD &, map<int, string>&);

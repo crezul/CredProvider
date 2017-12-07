@@ -24,6 +24,7 @@ using namespace std;
 #include <WtsApi32.h>
 #include <tchar.h>
 #pragma comment(lib, "WtsApi32.lib") 
+#include <map>
 
 //my
 #include "sessionid.h"
