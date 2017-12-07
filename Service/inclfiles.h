@@ -23,6 +23,7 @@ using namespace std;
 //for Active Session
 #include <WtsApi32.h>
 #include <tchar.h>
+#include <string>
 #pragma comment(lib, "WtsApi32.lib") 
 #include <map>
 

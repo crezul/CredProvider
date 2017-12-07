@@ -2,10 +2,9 @@ package apriorit.windowscredential;
 
 import android.annotation.TargetApi;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
-
 import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -43,6 +42,7 @@ public class MainActivity extends AppCompatActivity {
     private String password;//to send server
     private String sesiontolist;
     private String domentolist;
+    private Socket socket;
 
     public String getSesiontolist() {
         return sesiontolist;
@@ -99,8 +99,6 @@ public class MainActivity extends AppCompatActivity {
     public void setCodeCommand(byte codeCommand) {
         this.codeCommand = codeCommand;
     }
-    private Socket socket;
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -117,23 +115,20 @@ public class MainActivity extends AppCompatActivity {
     public void onClick(View v) {
         EditText etIPaddress = (EditText) findViewById(R.id.edIPaddress);
         setSerIpAddress(etIPaddress.getText().toString());
-        if (getSerIpAddress().isEmpty())
-        {
+        if (getSerIpAddress().isEmpty()) {
             Toast msgToast = Toast.makeText(this, "Input IP point, please", Toast.LENGTH_SHORT);
             msgToast.show();
             return;
-        }
-        else{
+        } else {
             //volidate
             IPAddressValidator validator = new IPAddressValidator();
             boolean result = validator.validate(etIPaddress.getText().toString());
-            if(!result)
-            {
+            if (!result) {
                 Toast msgToast = Toast.makeText(this, "Input volidate IP adress ", Toast.LENGTH_SHORT);
                 msgToast.show();
                 Log.d("Programm Logger :", "IP-adress not volidate");
                 return;
-            }else{
+            } else {
                 Log.d("Programm Logger :", "IP-adress  volidate");
             }
 
@@ -162,7 +157,7 @@ public class MainActivity extends AppCompatActivity {
                 listcclear();
                 setCodeCommand(codeSessionList);
                 Log.d("Programm Logger :", "you turn button sessionlist");
-                 sender = new SenderThread(); // class to send and recieve message
+                sender = new SenderThread(); // class to send and recieve message
                 sender.start();
                 break;
         }
@@ -171,12 +166,17 @@ public class MainActivity extends AppCompatActivity {
     private Void listconroller() {
         String member;
         if (getDomentolist().equals("@"))
-            setDomentolist("system@");;
+            setDomentolist("system@PC");
         member = "session " + getSesiontolist() + ": " + getDomentolist();
         sessionlist.add(member);
+        return null;
+    }
+
+    private Void changedlist() {
         listadapter.notifyDataSetChanged(); // changed
         return null;
     }
+
     private Void listcclear() {
         sessionlist.clear();
         listadapter.notifyDataSetChanged(); // changed
@@ -192,85 +192,97 @@ public class MainActivity extends AppCompatActivity {
         public int getPort() {
             return port;
         }
+
         public void run() {
 
             try {
-                Log.d("Programm Logger :", "Back section: sending and responding answer.");
-
                 try {
                     InetAddress ipAddress = InetAddress.getByName(getSerIpAddress());
                     Log.d("Programm Logger :", "IP server: " + ipAddress.toString());
                     socket = new Socket(ipAddress, getPort());
-                }
-                catch (IOException e) {
+                } catch (IOException e) {
                     Log.d("Error", "Error to create socket" + e.toString());
-                    Toast toast = Toast.makeText(getApplicationContext(),
-                            "Connection error with PC", Toast.LENGTH_SHORT);
-                    toast.show();
-                    return ;
+                    Handler handler = new Handler(getBaseContext().getMainLooper());
+                    handler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast toast = Toast.makeText(getApplicationContext(),
+                                    "Error to connect with PC", Toast.LENGTH_SHORT);
+                            toast.show();
+                        }
+                    });
+                    return;
                 }
-
+// check connection
                 //  if (!socket.getInetAddress().isReachable(1000))
                 //   return null;
 
-                OutputStream outputStream = socket.getOutputStream();
-                out = new DataOutputStream(outputStream);
-                // BufferedWriter out = new BufferedWriter((new OutputStreamWriter(socket.getOutputStream())));
-                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                switch (getCodeCommand()) {
-                    case codeAuto:
-                        //send command what to do
-                        try {
-                            JSONObject jo = new JSONObject();
-                            jo.put("command", getCodeAuto());
-                            jo.put("login", getLogin());
-                            jo.put("password", getPassword());
-                            out.write(jo.toString().getBytes());
-                            Log.d("Programm Logger :", "send massege...");
-                            Log.d("Programm Logger :", jo.toString());
-                        } catch (JSONException ex) {
-                            out.close();
-                            in.close();
-                            Log.d("Error", "Error to create JSON" + ex.toString());
-                            Toast toast = Toast.makeText(getApplicationContext(),
-                                    "Error to send message on PC", Toast.LENGTH_SHORT);
-                        }
-                        break;
-                    case codeSessionList:
-                        try {
-                            JSONObject jo = new JSONObject();
-                            jo.put("command", getCodeSessionList());
-                            out.write(jo.toString().getBytes());
-                            Log.d("Programm Logger :", "Send to server: " + jo.toString());
+                try {
+                    switch (getCodeCommand()) {
 
+                        case codeAuto:
+                            //send command what to do
+                            if (requestServerAuthentication(socket)) {
+                                Handler handler = new Handler(getBaseContext().getMainLooper());
+                                handler.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        Toast toast = Toast.makeText(getApplicationContext(),
+                                                "Sucess : send message on PC", Toast.LENGTH_SHORT);
+                                        toast.show();
+                                    }
+                                });
+                            }
+                            break;
+                        case codeSessionList:
+                            if (requestServerSessionList(socket)) {
+                                Handler handler = new Handler(getBaseContext().getMainLooper());
+                                handler.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        Toast toast = Toast.makeText(getApplicationContext(),
+                                                "Sucess : send message on PC", Toast.LENGTH_SHORT);
+                                        toast.show();
+                                    }
+                                });
+                            }
                             //respone
+                            if (responeServerSessionList(socket)) {
 
-                            String respone = in.readLine();
-
-                            Log.d("Programm Logger :", "Respone for server = " + respone);
-                            JSONObject jorespone = new JSONObject(respone);
-
-                            setDomentolist(jorespone.getString("domenname"));
-                            setSesiontolist(jorespone.getString("session"));
-
-                            Handler handler = new Handler(getBaseContext().getMainLooper());
-                            handler.post( new Runnable() {
-                                @Override
-                                public void run() {
-                                    listconroller();
-                                }
-                            } );
-                            Log.d("Programm Logger :", "JSON session " + getSesiontolist());
-                            Log.d("Programm Logger :", "JSON domenname " + getDomentolist());
-                            //view
-                        } catch (JSONException ex) {
-                            Log.d("Error", "Error to create JSON packet" + ex.toString());
+                                Handler handler = new Handler(getBaseContext().getMainLooper());
+                                handler.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        changedlist();  // update the interface
+                                    }
+                                });
+                            }
+                            break;
+                    }
+                } catch (JSONException ex) {
+                    out.close();
+                    in.close();
+                    Log.d("Error", "Error to create JSON" + ex.toString());
+                    Handler handler = new Handler(getBaseContext().getMainLooper());
+                    handler.post(new Runnable() {
+                        @Override
+                        public void run() {
                             Toast toast = Toast.makeText(getApplicationContext(),
                                     "Error to send message on PC", Toast.LENGTH_SHORT);
-                            out.close();
-                            in.close();
+                            toast.show();
                         }
-                        break;
+                    });
+                } catch (IOException e) {
+                    Log.d("Error", "Error of write to server" + e.toString());
+                    Handler handler = new Handler(getBaseContext().getMainLooper());
+                    handler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast toast = Toast.makeText(getApplicationContext(),
+                                    "Error to send message on PC", Toast.LENGTH_SHORT);
+                            toast.show();
+                        }
+                    });
                 }
             } catch (Exception ex) {
                 Log.d("Error of : ", ex.toString());
@@ -284,10 +296,74 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             }
-            return ;
+            return;
+        }
+
+        private boolean requestServerAuthentication(Socket socket) throws JSONException, IOException {
+            try {
+                OutputStream outputStream = socket.getOutputStream();
+                out = new DataOutputStream(outputStream);
+                // BufferedWriter out = new BufferedWriter((new OutputStreamWriter(socket.getOutputStream())));
+                JSONObject jo = new JSONObject();
+                jo.put("command", getCodeAuto());
+                jo.put("login", getLogin());
+                jo.put("password", getPassword());
+                out.write(jo.toString().getBytes());
+                Log.d("Programm Logger :", "send massege...");
+                Log.d("Programm Logger :", jo.toString());
+            } catch (JSONException ex) {
+                throw ex;
+            } catch (IOException e) {
+                throw e;
+            }
+
+            return true;
+        }
+
+        private boolean requestServerSessionList(Socket socket) throws JSONException, IOException {
+            try {
+                OutputStream outputStream = socket.getOutputStream();
+                out = new DataOutputStream(outputStream);
+                JSONObject jo = new JSONObject();
+                jo.put("command", getCodeSessionList());
+                out.write(jo.toString().getBytes());
+                Log.d("Programm Logger :", "Send to server: " + jo.toString());
+            } catch (JSONException ex) {
+                throw ex;
+            } catch (IOException e) {
+                throw e;
+            }
+            return true;
+        }
+
+        private boolean responeServerSessionList(Socket socket) throws JSONException, IOException {
+
+            try {
+                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+                String respone = in.readLine();
+
+                Log.d("Programm Logger :", "Respone for server = " + respone);
+                JSONObject jorespone = new JSONObject(respone);
+                int count = jorespone.getInt("count");
+                for (Integer i = 0; i < count; i++) {
+                    setSesiontolist(jorespone.getString("session" + i.toString()));
+                    setDomentolist(jorespone.getString("domenname" + i.toString()));
+                    Log.d("Programm Logger :", "JSON session " + getSesiontolist());
+                    Log.d("Programm Logger :", "JSON domenname " + getDomentolist());
+                    listconroller(); // changed arraylist
+                }
+
+            } catch (JSONException ex) {
+                throw ex;
+            } catch (IOException e) {
+                throw e;
+            }
+            return true;
         }
     }
 }
+
 //volidate IP
 class IPAddressValidator {
 

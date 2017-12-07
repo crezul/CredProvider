@@ -59,14 +59,23 @@ rapidjson::Document toJSONActiveSessionRespon(map<int, string>& session)  //resp
 
 	doc.SetObject();
 	addLogMessage("In TOJSON func");
+	int countOfsession=0 ;
 	for (auto it =session.begin(); it != session.end(); ++it)
 	{
+		string allsession = "session" + std::to_string(countOfsession);
+		string alldomens = "domenname" + std::to_string(countOfsession);
+
 		addLogMessage(it->first); addLogMessage((char*)it->second.c_str());
 		json_val.SetInt(it->first);
-		doc.AddMember("session", json_val, allocator);
+		
+		doc.AddMember(rapidjson::Value(allsession.c_str(), doc.GetAllocator()).Move(), json_val, allocator);
 		json_val.SetString(it->second.c_str(), allocator);
-		doc.AddMember("domenname", json_val, allocator);
+		doc.AddMember(rapidjson::Value(alldomens.c_str(), doc.GetAllocator()).Move(), json_val, allocator);
+		countOfsession++;
 	}
+	json_val.SetInt(countOfsession);
+	doc.AddMember("count", json_val, allocator);
 	addLogMessage("toJSONActiveSessionRespone:: String to respone client:"); 
 	return doc;
 }
+
