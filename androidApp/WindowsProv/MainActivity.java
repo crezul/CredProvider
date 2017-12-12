@@ -31,7 +31,6 @@ public class MainActivity extends AppCompatActivity {
 
     private final byte codeAuto = 0;     // send to autorization
     private final byte codeSessionList = 1;  // active session
-    //final byte codePoff = 3;    // computer power of
     private byte codeCommand;
     //
     private ArrayList<String> sessionlist;
@@ -40,9 +39,10 @@ public class MainActivity extends AppCompatActivity {
     private String serIpAddress;       // аdress of server
     private String login;   //to send server
     private String password;//to send server
+
     private String sesiontolist;
     private String domentolist;
-    private Socket socket;
+
 
     public String getSesiontolist() {
         return sesiontolist;
@@ -140,30 +140,29 @@ public class MainActivity extends AppCompatActivity {
         setPassword(etPass.getText().toString());
 
 // controller
-        SenderThread sender;
+        SenderThread sender = new SenderThread(); // class to send and recieve message
+        // create one theard in this place
         switch (v.getId()) {
-            case R.id.btnSMsg:
+            case R.id.btnAutorization:
                 if (!getLogin().isEmpty() && !getPassword().isEmpty()) {
                     setCodeCommand(codeAuto);
                     Log.d("Programm Logger :", "you turn button autorization");
-                    sender = new SenderThread(); // class to send and recieve message
                     sender.start();
                 } else {
                     Toast msgToast = Toast.makeText(this, "Please, input all margins", Toast.LENGTH_SHORT);
                     msgToast.show();
                 }
                 break;
-            case R.id.btnRotate:
-                listcclear();
+            case R.id.btnActiveSessions:
                 setCodeCommand(codeSessionList);
                 Log.d("Programm Logger :", "you turn button sessionlist");
-                sender = new SenderThread(); // class to send and recieve message
                 sender.start();
+                listcclear();
                 break;
         }
     }
 
-    private Void listconroller() {
+    protected Void listconroller() {
         String member;
         if (getDomentolist().equals("@"))
             setDomentolist("system@PC");
@@ -172,17 +171,20 @@ public class MainActivity extends AppCompatActivity {
         return null;
     }
 
-    private Void changedlist() {
+    protected Void changedlist() {
         listadapter.notifyDataSetChanged(); // changed
         return null;
     }
 
-    private Void listcclear() {
+    protected Void listcclear() {
         sessionlist.clear();
         listadapter.notifyDataSetChanged(); // changed
         return null;
     }
 
+
+
+    //
     class SenderThread extends Thread {
         private final int port = 87; //port to socket
         private Socket socket;
@@ -194,7 +196,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         public void run() {
-
+            Handler handler = new Handler(getBaseContext().getMainLooper());
             try {
                 try {
                     InetAddress ipAddress = InetAddress.getByName(getSerIpAddress());
@@ -202,7 +204,6 @@ public class MainActivity extends AppCompatActivity {
                     socket = new Socket(ipAddress, getPort());
                 } catch (IOException e) {
                     Log.d("Error", "Error to create socket" + e.toString());
-                    Handler handler = new Handler(getBaseContext().getMainLooper());
                     handler.post(new Runnable() {
                         @Override
                         public void run() {
@@ -223,7 +224,6 @@ public class MainActivity extends AppCompatActivity {
                         case codeAuto:
                             //send command what to do
                             if (requestServerAuthentication(socket)) {
-                                Handler handler = new Handler(getBaseContext().getMainLooper());
                                 handler.post(new Runnable() {
                                     @Override
                                     public void run() {
@@ -236,7 +236,6 @@ public class MainActivity extends AppCompatActivity {
                             break;
                         case codeSessionList:
                             if (requestServerSessionList(socket)) {
-                                Handler handler = new Handler(getBaseContext().getMainLooper());
                                 handler.post(new Runnable() {
                                     @Override
                                     public void run() {
@@ -249,7 +248,6 @@ public class MainActivity extends AppCompatActivity {
                             //respone
                             if (responeServerSessionList(socket)) {
 
-                                Handler handler = new Handler(getBaseContext().getMainLooper());
                                 handler.post(new Runnable() {
                                     @Override
                                     public void run() {
@@ -263,7 +261,6 @@ public class MainActivity extends AppCompatActivity {
                     out.close();
                     in.close();
                     Log.d("Error", "Error to create JSON" + ex.toString());
-                    Handler handler = new Handler(getBaseContext().getMainLooper());
                     handler.post(new Runnable() {
                         @Override
                         public void run() {
@@ -274,7 +271,6 @@ public class MainActivity extends AppCompatActivity {
                     });
                 } catch (IOException e) {
                     Log.d("Error", "Error of write to server" + e.toString());
-                    Handler handler = new Handler(getBaseContext().getMainLooper());
                     handler.post(new Runnable() {
                         @Override
                         public void run() {
@@ -364,22 +360,3 @@ public class MainActivity extends AppCompatActivity {
     }
 }
 
-//volidate IP
-class IPAddressValidator {
-
-    private static final String IP_ADDRESS_PATTERN
-            = "^([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\."
-            + "([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\."
-            + "([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\."
-            + "([01]?\\d\\d?|2[0-4]\\d|25[0-5])$";
-
-    private final Pattern pattern;
-
-    public IPAddressValidator() {
-        pattern = Pattern.compile(IP_ADDRESS_PATTERN);
-    }
-
-    public boolean validate(String ipAddress) {
-        return pattern.matcher(ipAddress).matches();
-    }
-}

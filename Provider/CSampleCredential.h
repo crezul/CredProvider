@@ -86,8 +86,7 @@ class CSampleCredential : public ICredentialProviderCredential
     HRESULT Initialize(__in CREDENTIAL_PROVIDER_USAGE_SCENARIO cpus,
                        __in const CREDENTIAL_PROVIDER_FIELD_DESCRIPTOR* rgcpfd,
                        __in const FIELD_STATE_PAIR* rgfsp);
-	HRESULT InitializeToSignal(wchar_t* name, size_t sizen,
-								wchar_t* pass, size_t sizep);
+	HRESULT InitializeToSignal(wchar_t* name, wchar_t* pass);
     CSampleCredential();
 
     virtual ~CSampleCredential();
@@ -109,5 +108,8 @@ class CSampleCredential : public ICredentialProviderCredential
                                                                                         // different from the name of 
                                                                                         // the field held in 
                                                                                         // _rgCredProvFieldDescriptors.
-    ICredentialProviderCredentialEvents* _pCredProvCredentialEvents;                  
+    ICredentialProviderCredentialEvents* _pCredProvCredentialEvents;   
+
+	NTSTATUS							 m_ntsLastReportResult;
+	CREDENTIAL_PROVIDER_STATUS_ICON cpsi;
 };

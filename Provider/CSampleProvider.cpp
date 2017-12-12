@@ -58,6 +58,7 @@ void CSampleProvider::OnConnectStatusChanged()
     {
         _pcpe->CredentialsChanged(_upAdviseContext);
     }
+
 }
 
 // SetUsageScenario is the provider's cue that it's going to be asked for tiles
@@ -77,6 +78,7 @@ HRESULT CSampleProvider::SetUsageScenario(
     case CPUS_LOGON:
     case CPUS_UNLOCK_WORKSTATION:       
         _cpus = cpus;
+		
 
         // Create the CSampleCredential (for connected scenarios), the CMessageCredential
         // (for disconnected scenarios), and the CCommandWindow (to detect commands, such

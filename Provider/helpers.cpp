@@ -16,7 +16,7 @@
 
 
 // muLog file
-static char * fstremname = "C:\\Users\\Danil\\Desktop\\Service_android_provider.txt"; //local directory to LocalUser
+static char * fstremname = "C:\\Users\\Danil\\Desktop\\Android_provider.txt"; //local directory to LocalUser
 
 void addLogMessage(LPTSTR un)
 {

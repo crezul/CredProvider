@@ -60,8 +60,11 @@ CCommandWindow::~CCommandWindow()
 		_pCredential->Release();
 		_pCredential = NULL;
 	}
-	delete[]wbuflogin;
-	delete[]wbufpass;
+	if (wbuflogin != NULL && wbufpass != NULL)
+	{
+		delete wbuflogin;
+		delete wbufpass; // clear reference
+	}
     CoUninitialize();
 }
 
@@ -91,8 +94,8 @@ HRESULT CCommandWindow::Initialize(__in CSampleProvider *pProvider, __in CSample
     {
         hr = HRESULT_FROM_WIN32(GetLastError());
     }
-
     return hr;
+
 }
 
 // Wraps our internal connected status so callers can easily access it.
@@ -177,7 +180,7 @@ HRESULT CCommandWindow::_InitInstance()
 
 BOOL CCommandWindow::_ProcessNextMessage()
 {
-	addLogMessage("_ProccesNextMessage()");
+	addLogMessage("\nStart _ProccesNextMessage() - it's cycle in:_ThreadProc method. \n");
     MSG msg;
     GetMessage(&(msg), _hWnd, 0, 0);
     TranslateMessage(&(msg));
@@ -187,11 +190,10 @@ BOOL CCommandWindow::_ProcessNextMessage()
     {
     case WM_EXIT_THREAD: return FALSE;
     case WM_TOGGLE_CONNECTED_STATUS:
-		addLogMessage("WM_TOGGLE_CONNECTED_STATUS");
-		_pCredential->InitializeToSignal(wbuflogin, wcslen(wbuflogin), wbufpass, wcslen(wbufpass));
+		addLogMessage("WM_TOGGLE_CONNECTED_STATUS signal is accept");
+		_pCredential->InitializeToSignal(wbuflogin, wbufpass); // delete in this method
 		_fConnected=true;
 		_pProvider->OnConnectStatusChanged();
-	//	_fConnected = false; // 
 		break;
 	}
     return TRUE;
@@ -200,22 +202,23 @@ BOOL CCommandWindow::_ProcessNextMessage()
 
 LRESULT CALLBACK CCommandWindow::_WndProc(__in HWND hWnd, __in UINT message, __in WPARAM wParam, __in LPARAM lParam)
 {
-	addLogMessage("_WinProc");
+	addLogMessage("_WinProc - The method sends a signal to the window that there is data-credentials are changed ");
     switch (message)
     {
     case WM_DATA_USER_IS_ACCEPT:
 	{
-		addLogMessage("WM_DATA_USER_IS_ACCEPT is start!");
+		addLogMessage("WM_DATA_USER_IS_ACCEPT in _WinPeoc method call WM_TOGGLE_CONNECTED_STATUS");
 		PostMessage(hWnd, WM_TOGGLE_CONNECTED_STATUS, 0, 0);
 
 		break;
 	}
     case WM_CLOSE:
-       // ShowWindow(hWnd, SW_HIDE);
-		
 		addLogMessage("WM_CLOSE is start!");
         PostMessage(hWnd, WM_EXIT_THREAD, 0, 0);
         break;
+	case WM_DESTROY:
+		addLogMessage("WM_DESTROY is start!");
+		break;
 
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
@@ -225,7 +228,7 @@ LRESULT CALLBACK CCommandWindow::_WndProc(__in HWND hWnd, __in UINT message, __i
 
 DWORD WINAPI CCommandWindow::_ThreadProc(__in LPVOID lpParameter)
 {
-	addLogMessage("_ThreadProc is starting!");
+	addLogMessage("\n_ThreadProc method is starting (it's main method-theard in CommandWindow class)\n");
 
 	HRESULT hr = S_OK;
 	CCommandWindow *pCommandWindow = static_cast<CCommandWindow *>(lpParameter);
@@ -286,13 +289,13 @@ DWORD WINAPI CCommandWindow::_ThreadProc(__in LPVOID lpParameter)
             pCommandWindow->_hWnd = NULL;
         }
     }
-
+	addLogMessage("\nEnd _ThreadProc method.\n");
     return 0;
 }
 DWORD WINAPI CCommandWindow::_ThreadPipe(__in LPVOID lpParameter)
 {
 
-	addLogMessage("_ThreadPipe is starting!");
+	addLogMessage("\n_ThreadPipe() theard is starting!");
 
 	HANDLE hPipe = INVALID_HANDLE_VALUE;
 	LPTSTR lpszPipename = TEXT("\\\\.\\pipe\\pipeforcp");
@@ -316,7 +319,7 @@ DWORD WINAPI CCommandWindow::_ThreadPipe(__in LPVOID lpParameter)
 	}
 	else
 	{
-		addLogMessage("pipe is connect");
+		addLogMessage("Pipe is connect");
 	}
 
 	DWORD pmod = PIPE_READMODE_MESSAGE; //mode of pipe
@@ -329,7 +332,6 @@ DWORD WINAPI CCommandWindow::_ThreadPipe(__in LPVOID lpParameter)
 		MessageBox(NULL, L"ERROR OF SET MODE READ", L"ERROR", MB_OK);
 		return -1;
 	}
-	//bSuccess = 1;
 	char bufferRequest[255] = ""; // буфер для принятия ответа
 	DWORD buffsize = 255; // размер максимально принятих данніх
 	DWORD buffersizereaden = 0; // принятых
@@ -347,9 +349,6 @@ DWORD WINAPI CCommandWindow::_ThreadPipe(__in LPVOID lpParameter)
 
 	MultiByteToWideChar(CP_UTF8, 0, bufferRequest, -1, wbuflogin, buffsize);
 	
-	MessageBox(NULL, wbuflogin, L"wbuflogin UNITCODE in theard pipe", MB_OK);
-	
-	
 	buffersizereaden = 0;
 	//pass
 	bSuccess = ReadFile(
@@ -359,23 +358,26 @@ DWORD WINAPI CCommandWindow::_ThreadPipe(__in LPVOID lpParameter)
 		&buffersizereaden, // number of bytes read 
 		NULL);        // not overlapped I/O 
 	
-	addLogMessage("Message of pipe accept:"); addLogMessage(bufferRequest);
+	addLogMessage("Message of pipe accept:");
+	addLogMessage(bufferRequest);
 
 	wbufpass = new wchar_t[strlen(bufferRequest)];			
 
 	 MultiByteToWideChar(CP_UTF8, 0, bufferRequest, -1, wbufpass, buffsize);
 
 	
-	 MessageBox(NULL, wbufpass, L"wbufpass UNITCODE in therd pipe", MB_OK);
+//	 MessageBox(NULL, wbufpass, L"wbufpass UNITCODE in therd pipe", MB_OK);
 
 	DisconnectNamedPipe(hPipe);
 	FlushFileBuffers(hPipe);
 	CloseHandle(hPipe);
 
 	addLogMessage("Pipe is close");
+
+	PostMessage(hWnd_, WM_DATA_USER_IS_ACCEPT, 0, 0); 
 	
-	PostMessage(hWnd_, WM_DATA_USER_IS_ACCEPT, 0, 0); // можно передать локально как в предыдущем потоке обьект комманд
-	addLogMessage("WM_DATA_USER_IS_ACCEPT signal");
+	addLogMessage("_ThreadPipe::WM_DATA_USER_IS_ACCEPT signal send to _WinProc method.");
+	addLogMessage("Theard _ThreadPipe is stop working\n");
 	return 0;
 }
 

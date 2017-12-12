@@ -37,8 +37,8 @@ BOOL SpeakWithPipe(char * loginbuf, char* password)
 	// CredProv start and took us - I got connected to us
 	if (fConnected)
 	{
-		DWORD  writtenBytes = 0; // записаных в канал байтов
-		DWORD bufferSizeWrite = 255; //-нужно динамически редактировать эту переменную
+		DWORD  writtenBytes = 0; //writes bytes in pipe
+		DWORD bufferSizeWrite = 255; 
 		addLogMessage("CP was connected, start to write in pipe..."); // debugMessage
 																	  // Loop until done reading
 
@@ -169,6 +169,6 @@ BOOL GetUserdomenName(DWORD & dwSessionId,map<int, string>& allsession)
 	addLogMessage("Insert in map");
 	allsession.insert(pair<int,string>((int)dwSessionId, domenname));
 	addLogMessage("map size in func = "); addLogMessage(allsession.size());
-	//LocalFree(szUpn); // in global system
+	LocalFree(szUpn); // in global system
 	return TRUE;
 }

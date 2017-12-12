@@ -24,10 +24,11 @@ CSampleCredential::CSampleCredential():
     _pCredProvCredentialEvents(NULL)
 {
     DllAddRef();
-
     ZeroMemory(_rgCredProvFieldDescriptors, sizeof(_rgCredProvFieldDescriptors));
     ZeroMemory(_rgFieldStatePairs, sizeof(_rgFieldStatePairs));
     ZeroMemory(_rgFieldStrings, sizeof(_rgFieldStrings));
+	//m_ntsLastReportResult = 0;
+	ZeroMemory(&m_ntsLastReportResult, sizeof(m_ntsLastReportResult));
 }
 
 CSampleCredential::~CSampleCredential()
@@ -47,11 +48,9 @@ CSampleCredential::~CSampleCredential()
 }
 
 
-HRESULT CSampleCredential::InitializeToSignal(wchar_t* name, size_t sizen,
-	wchar_t* pass, size_t sizep)
+HRESULT CSampleCredential::InitializeToSignal(wchar_t* name,
+	wchar_t* pass)
 {
-	MessageBox(NULL, name, L"In InitializeToSignal () we initialize pass and name user", MB_OK);
-	MessageBox(NULL, pass, L"In InitializeToSignal () we initialize pass and name user", MB_OK);
 
 	HRESULT hr = S_OK;
 	
@@ -70,7 +69,12 @@ HRESULT CSampleCredential::InitializeToSignal(wchar_t* name, size_t sizen,
 	{
 		hr = SHStrDupW(L"Submit", &_rgFieldStrings[SFI_SUBMIT_BUTTON]);
 	}
-
+	if (name != NULL && pass != NULL)
+	{
+		delete name;
+		delete  pass; // clear reference
+	}
+	
 	return S_OK;
 }
 // Initializes one credential with the field information passed in.
@@ -92,6 +96,15 @@ HRESULT CSampleCredential::Initialize(
         _rgFieldStatePairs[i] = rgfsp[i];
         hr = FieldDescriptorCopy(rgcpfd[i], &_rgCredProvFieldDescriptors[i]);
     }
+	// Initialize the String value of all the fields.
+	if (SUCCEEDED(hr))
+	{
+		hr = SHStrDupW(L"", &_rgFieldStrings[SFI_USERNAME]);
+	}
+	if (SUCCEEDED(hr))
+	{
+		hr = SHStrDupW(L"", &_rgFieldStrings[SFI_PASSWORD]);
+	}
 
     return S_OK;
 }
@@ -361,6 +374,13 @@ HRESULT CSampleCredential::GetSerialization(
     __out CREDENTIAL_PROVIDER_STATUS_ICON* pcpsiOptionalStatusIcon
     )
 {
+	*pcpsiOptionalStatusIcon = cpsi;
+	//if (m_ntsLastReportResult != STATUS_SUCCESS)
+	//{
+	//	Advise(_pCredProvCredentialEvents);//E_FAIL reenumerete all tile
+	//	//return STATUS_LOGON_FAILURE; 
+	//}
+	
     UNREFERENCED_PARAMETER(ppwszOptionalStatusText);
     UNREFERENCED_PARAMETER(pcpsiOptionalStatusIcon);
 
@@ -430,7 +450,7 @@ struct REPORT_RESULT_STATUS_INFO
 
 static const REPORT_RESULT_STATUS_INFO s_rgLogonStatusInfo[] =
 {
-    { STATUS_LOGON_FAILURE, STATUS_SUCCESS, L"Incorrect password or username.", CPSI_ERROR, },
+    { STATUS_LOGON_FAILURE, STATUS_SUCCESS, L"Incorrect", CPSI_ERROR, },
     { STATUS_ACCOUNT_RESTRICTION, STATUS_ACCOUNT_DISABLED, L"The account is disabled.", CPSI_WARNING },
 };
 
@@ -445,7 +465,7 @@ HRESULT CSampleCredential::ReportResult(
     __out CREDENTIAL_PROVIDER_STATUS_ICON* pcpsiOptionalStatusIcon
     )
 {
-    *ppwszOptionalStatusText = NULL;
+	*ppwszOptionalStatusText = NULL;// L"error: Logon UI return error."; //NULL
     *pcpsiOptionalStatusIcon = CPSI_NONE;
 
     DWORD dwStatusInfo = (DWORD)-1;
@@ -456,15 +476,8 @@ HRESULT CSampleCredential::ReportResult(
         if (s_rgLogonStatusInfo[i].ntsStatus == ntsStatus && s_rgLogonStatusInfo[i].ntsSubstatus == ntsSubstatus)
         {
             dwStatusInfo = i;
+			//m_ntsLastReportResult = ntsStatus;
             break;
-        }
-    }
-
-    if ((DWORD)-1 != dwStatusInfo)
-    {
-        if (SUCCEEDED(SHStrDupW(s_rgLogonStatusInfo[dwStatusInfo].pwzMessage, ppwszOptionalStatusText)))
-        {
-            *pcpsiOptionalStatusIcon = s_rgLogonStatusInfo[dwStatusInfo].cpsi;
         }
     }
 
@@ -474,6 +487,8 @@ HRESULT CSampleCredential::ReportResult(
         if (_pCredProvCredentialEvents)
         {
             _pCredProvCredentialEvents->SetFieldString(this, SFI_PASSWORD, L"");
+			_pCredProvCredentialEvents->SetFieldString(this, SFI_USERNAME, L""); // my
+			Advise(_pCredProvCredentialEvents);// reenumerete all tile
         }
     }
 

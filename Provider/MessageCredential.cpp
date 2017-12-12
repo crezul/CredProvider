@@ -261,6 +261,7 @@ HRESULT CMessageCredential::GetSerialization(
     return E_NOTIMPL;
 }
 
+
 // We're not providing a way to log on from this credential, so it can't have a result.
 HRESULT CMessageCredential::ReportResult(
     __in NTSTATUS ntsStatus, 
@@ -273,6 +274,6 @@ HRESULT CMessageCredential::ReportResult(
     UNREFERENCED_PARAMETER(ntsStatus);
     UNREFERENCED_PARAMETER(ntsSubstatus);
     UNREFERENCED_PARAMETER(ppwszOptionalStatusText);
-    UNREFERENCED_PARAMETER(pcpsiOptionalStatusIcon);
+	UNREFERENCED_PARAMETER(pcpsiOptionalStatusIcon);
     return E_NOTIMPL;
 }
